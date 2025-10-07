@@ -510,7 +510,7 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 	if err != nil {
 		return nil, fmt.Errorf("invalid peer ID: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(n.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(n.ctx, 60*time.Second)
 	defer cancel()
 
 	// 创建流
@@ -536,6 +536,9 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 	if _, err := stream.Write(reqData); err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
+
+	// 确保请求数据被发送
+	stream.CloseWrite()
 
 	// 读取响应
 	var responseData []byte
