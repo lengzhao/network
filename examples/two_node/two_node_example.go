@@ -43,19 +43,31 @@ func main() {
 
 	// 为节点1注册处理器
 	net1.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-		fmt.Printf("[Node 1] Received broadcast message from %s: %s\n", from, string(msg.Data))
+		fmt.Printf("[Node 1] Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
 		return nil
 	})
 
+	// 节点1需要处理来自节点2的echo和query请求
 	net1.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
-		fmt.Printf("[Node 1] Received request from %s: %s\n", from, string(req.Data))
+		fmt.Printf("[Node 1] Received echo request from %s: %s\n", from, string(req.Data))
 		return append([]byte("Echo: "), req.Data...), nil
+	})
+
+	net1.RegisterRequestHandler("query", func(from string, req network.Request) ([]byte, error) {
+		fmt.Printf("[Node 1] Received query from %s: %s\n", from, string(req.Data))
+		return []byte("Current time: " + time.Now().Format(time.RFC3339)), nil
 	})
 
 	// 为节点2注册处理器
 	net2.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-		fmt.Printf("[Node 2] Received broadcast message from %s: %s\n", from, string(msg.Data))
+		fmt.Printf("[Node 2] Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
 		return nil
+	})
+
+	// 节点2需要处理来自节点1的echo和query请求
+	net2.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
+		fmt.Printf("[Node 2] Received echo request from %s: %s\n", from, string(req.Data))
+		return append([]byte("Echo: "), req.Data...), nil
 	})
 
 	net2.RegisterRequestHandler("query", func(from string, req network.Request) ([]byte, error) {
@@ -90,7 +102,7 @@ func main() {
 		}
 	}()
 
-	// 等待节点启动
+	// 等待节点启动和处理器注册完成
 	time.Sleep(2 * time.Second)
 
 	// 打印节点地址
@@ -106,10 +118,11 @@ func main() {
 
 	// 连接两个节点
 	fmt.Println("\n--- Connecting nodes ---")
-	// 使用节点1的第一个地址连接到节点2
-	if len(net1.GetLocalAddresses()) > 0 {
-		addr1 := net1.GetLocalAddresses()[0]
-		err = net2.ConnectToPeer(addr1)
+	// 使用节点2的第一个地址连接到节点1
+	if len(net2.GetLocalAddresses()) > 0 {
+		addr2 := net2.GetLocalAddresses()[0]
+		fmt.Printf("Connecting Node 1 to Node 2 at address: %s\n", addr2)
+		err = net1.ConnectToPeer(addr2)
 		if err != nil {
 			log.Printf("Failed to connect nodes: %v", err)
 		} else {
@@ -117,50 +130,67 @@ func main() {
 		}
 	}
 
-	// 等待连接建立
-	time.Sleep(2 * time.Second)
+	// 等待连接建立和订阅完成
+	fmt.Println("Waiting for connections and subscriptions to establish...")
+	time.Sleep(3 * time.Second)
+
+	// 检查连接状态
+	fmt.Println("\n--- Connection status ---")
+	peers1 := net1.GetPeers()
+	peers2 := net2.GetPeers()
+	fmt.Printf("[Node 1] Connected peers: %v\n", peers1)
+	fmt.Printf("[Node 2] Connected peers: %v\n", peers2)
 
 	// 演示广播消息
 	fmt.Println("\n--- Broadcasting message ---")
 	err = net1.BroadcastMessage("chat", []byte("Hello from Node 1!"))
 	if err != nil {
 		log.Printf("Node 1 failed to broadcast message: %v", err)
+	} else {
+		fmt.Println("Node 1 broadcast message: 'Hello from Node 1!'")
 	}
 
 	err = net2.BroadcastMessage("chat", []byte("Hello from Node 2!"))
 	if err != nil {
 		log.Printf("Node 2 failed to broadcast message: %v", err)
+	} else {
+		fmt.Println("Node 2 broadcast message: 'Hello from Node 2!'")
 	}
 
 	// 等待广播消息处理
-	time.Sleep(1 * time.Second)
+	fmt.Println("Waiting for broadcast messages to be processed...")
+	time.Sleep(2 * time.Second)
 
 	// 演示点对点请求
 	fmt.Println("\n--- Sending P2P requests ---")
 	// 节点1向节点2发送echo请求
 	node2PeerID := net2.GetLocalPeerID()
+	fmt.Printf("Node 1 sending echo request to Node 2 (Peer ID: %s)\n", node2PeerID)
+	time.Sleep(1 * time.Second) // 确保处理器注册完成
 	response, err := net1.SendRequest(node2PeerID, "echo", []byte("Hello Node 2!"))
 	if err != nil {
-		log.Printf("Node 1 failed to send request to Node 2: %v", err)
+		log.Printf("Node 1 failed to send echo request to Node 2: %v", err)
 	} else {
-		fmt.Printf("[Node 1] Received response from Node 2: %s\n", string(response))
+		fmt.Printf("[Node 1] Received echo response from Node 2: %s\n", string(response))
 	}
 
 	// 节点2向节点1发送query请求
 	node1PeerID := net1.GetLocalPeerID()
+	fmt.Printf("Node 2 sending query request to Node 1 (Peer ID: %s)\n", node1PeerID)
+	time.Sleep(1 * time.Second) // 确保处理器注册完成
 	response, err = net2.SendRequest(node1PeerID, "query", []byte("What time is it?"))
 	if err != nil {
-		log.Printf("Node 2 failed to send request to Node 1: %v", err)
+		log.Printf("Node 2 failed to send query request to Node 1: %v", err)
 	} else {
-		fmt.Printf("[Node 2] Received response from Node 1: %s\n", string(response))
+		fmt.Printf("[Node 2] Received query response from Node 1: %s\n", string(response))
 	}
 
-	// 等待用户中断或20秒后自动退出
+	// 等待用户中断或30秒后自动退出
 	fmt.Println("\nNetwork is running. Press Ctrl+C to stop.")
 	select {
 	case <-sigChan:
 		fmt.Println("\nReceived interrupt signal, shutting down...")
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		fmt.Println("\nTimeout reached, shutting down...")
 	}
 

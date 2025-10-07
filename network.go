@@ -402,11 +402,6 @@ func (n *Network) RegisterMessageFilter(topic string, filter MessageFilter) {
 func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	log.Printf("handling request from peer: %s", stream.Conn().RemotePeer().String())
 
-	defer func() {
-		time.Sleep(100 * time.Millisecond)
-		stream.Close()
-	}()
-
 	// 读取请求数据 - 支持大数据量
 	var data []byte
 	buffer := make([]byte, 4096) // 4KB缓冲区
@@ -422,6 +417,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 				break
 			}
 			log.Printf("failed to read request data: %v", err)
+			stream.Close()
 			return
 		}
 		if bytesRead == 0 {
@@ -431,6 +427,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 
 	if len(data) == 0 {
 		log.Printf("received empty request data")
+		stream.Close()
 		return
 	}
 
@@ -438,13 +435,18 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	var req Request
 	if err := req.Deserialize(data); err != nil {
 		log.Printf("failed to deserialize request: %v", err)
+		stream.Close()
 		return
 	}
 
 	log.Printf("parsed request, type: %s, data length: %d", req.Type, len(req.Data))
 
-	// 调用处理器
+	// 打印当前注册的处理器（用于调试）
 	n.requestMu.RLock()
+	log.Printf("currently registered handlers: %v", len(n.requestHandlers))
+	for k := range n.requestHandlers {
+		log.Printf("  handler for type: %s", k)
+	}
 	handler, exists := n.requestHandlers[req.Type]
 	n.requestMu.RUnlock()
 
@@ -459,6 +461,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		if _, err := stream.Write(respBytes); err != nil {
 			log.Printf("failed to send error response: %v", err)
 		}
+		stream.Close()
 		return
 	}
 
@@ -474,6 +477,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		if _, err := stream.Write(respBytes); err != nil {
 			log.Printf("failed to send error response: %v", err)
 		}
+		stream.Close()
 		return
 	}
 
@@ -485,6 +489,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	respBytes, err := resp.Serialize()
 	if err != nil {
 		log.Printf("failed to serialize response: %v", err)
+		stream.Close()
 		return
 	}
 
@@ -494,6 +499,9 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	} else {
 		log.Printf("response sent successfully")
 	}
+
+	// 确保数据被刷新并关闭流
+	stream.Close()
 }
 
 // RegisterRequestHandler 注册点对点请求处理器
