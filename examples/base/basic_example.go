@@ -13,17 +13,8 @@ import (
 )
 
 func main() {
-	// 创建网络配置
-	cfg := &network.NetworkConfig{
-		Host:           "0.0.0.0",
-		Port:           8000,
-		MaxPeers:       100,
-		PrivateKeyPath: "./private_key.pem",
-		BootstrapPeers: []string{}, // 在实际应用中可以添加引导节点
-	}
-
 	// 创建网络实例
-	net, err := network.New(cfg)
+	net, err := network.New(nil)
 	if err != nil {
 		log.Fatalf("Failed to create network: %v", err)
 	}

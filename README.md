@@ -1,188 +1,206 @@
-# P2P Network Library
+# 基于go-libp2p的通用网络模块
 
-A modern P2P network library based on libp2p for Go applications.
+## 概述
 
-## Features
+这是一个基于go-libp2p的通用网络模块，可用于区块链、聊天系统等多种P2P应用场景。该模块提供简单易用的API，支持广播模式和点对点请求模式，并为广播模式提供过滤功能。
 
-- Node discovery and connection management
-- Message broadcasting with topic-based pub/sub
-- Point-to-point request/response communication
-- Message filtering and content-based filtering
-- Node whitelist for access control
-- Extensible architecture
-- Flexible logging system based on Go's slog package
+## 功能特性
 
-## Installation
+- **双重通信模式**：支持广播模式（发布/订阅）和点对点请求/响应模式
+- **简单易用**：提供简洁的API接口，降低P2P网络编程的复杂性
+- **消息过滤**：广播模式支持消息过滤功能
+- **自动发现**：支持mDNS本地节点发现（可配置启用/禁用）
+- **安全传输**：基于libp2p的安全传输协议
+- **可扩展性**：模块化设计，易于集成到不同类型的项目中
+
+## 安装
 
 ```bash
 go get github.com/lengzhao/network
 ```
 
-## Usage
+## 快速开始
 
-### Basic Example
+### 1. 创建网络实例
 
 ```go
-import "github.com/lengzhao/network"
+import (
+    "github.com/lengzhao/network"
+)
 
-// Create network configuration with logging
-logConfig := &network.LogConfig{
-    Level:      network.INFO,
-    OutputFile: "/var/log/network.log",
-    Format:     network.JSON,
-    Modules: map[string]network.ModuleConfig{
-        "network.pubsub": {Level: network.DEBUG},
-        "network.security": {Level: network.WARN},
-    },
-    Enabled: true,
-}
+// 方法1: 使用NewNetworkConfig创建默认配置（推荐）
+cfg := network.NewNetworkConfig()
+cfg.Host = "0.0.0.0"
+cfg.Port = 8000
+cfg.MaxPeers = 100
+cfg.PrivateKeyPath = "./private_key.pem"
+cfg.BootstrapPeers = []string{} // 可选的引导节点
+// cfg.DisableMDNS 默认为false，即默认启用MDNS
 
+// 方法2: 直接创建配置
+/*
 cfg := &network.NetworkConfig{
-    Host:     "127.0.0.1",
-    Port:     8080,
-    MaxPeers: 100,
-    LogConfig: logConfig,
+    Host:           "0.0.0.0",
+    Port:           8000,
+    MaxPeers:       100,
+    PrivateKeyPath: "./private_key.pem",
+    BootstrapPeers: []string{}, // 可选的引导节点
+    DisableMDNS:    false,      // 是否禁用mDNS本地发现（默认为false，即默认启用）
 }
+*/
 
-// Create network instance
+// 创建网络实例
 net, err := network.New(cfg)
 if err != nil {
-    log.Fatal(err)
+    log.Fatalf("Failed to create network: %v", err)
 }
+```
 
-// Run the network
-ctx, cancel := context.WithCancel(context.Background())
-defer cancel()
+### 2. 注册消息处理器
 
-go func() {
-    if err := net.Run(ctx); err != nil {
-        log.Fatal(err)
-    }
-}()
-
-// Register message handler
+```go
+// 注册广播消息处理器
 net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-    fmt.Printf("Received message from %s: %s\n", from, string(msg.Data))
+    fmt.Printf("Received broadcast message from %s: %s\n", from, string(msg.Data))
     return nil
 })
 
-// Broadcast message
-net.BroadcastMessage("chat", []byte("Hello, world!"))
-
-// Use the new simplified logging approach
-logger := net.GetLogManager().With("module", "chat")
-logger.Info("Chat handler initialized")
-```
-
-### Message Filtering
-
-The library supports message filtering at two levels:
-
-1. **Content-based filtering**: Filter messages based on their content
-2. **Node-based filtering**: Filter messages based on sender identity
-
-```go
-// Register content filter
-net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
-    // Reject messages containing "spam"
-    return !strings.Contains(string(msg.Data), "spam")
+// 注册点对点请求处理器
+net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
+    // 回显请求数据作为响应
+    return req.Data, nil
 })
 ```
 
-### Node Whitelist
-
-Node whitelist functionality can be configured at the network level:
+### 3. 注册消息过滤器（可选）
 
 ```go
-cfg := &network.NetworkConfig{
-    Host:          "127.0.0.1",
-    Port:          8080,
-    MaxPeers:      100,
-    PeerWhitelist: []string{"peer-id-1", "peer-id-2"},
+// 注册消息过滤器
+net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
+    // 过滤掉包含"spam"的消息
+    if string(msg.Data) == "spam" {
+        return false
+    }
+    return true
+})
+```
+
+### 4. 启动网络
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+// 在goroutine中运行网络
+go func() {
+    if err := net.Run(ctx); err != nil {
+        log.Printf("Network stopped with error: %v", err)
+    }
+}()
+
+// 等待网络启动
+time.Sleep(1 * time.Second)
+```
+
+### 5. 使用网络功能
+
+```go
+// 广播消息
+err = net.BroadcastMessage("chat", []byte("Hello, world!"))
+if err != nil {
+    log.Printf("Failed to broadcast message: %v", err)
+}
+
+// 发送点对点请求
+response, err := net.SendRequest(targetPeerID, "echo", []byte("Hello!"))
+if err != nil {
+    log.Printf("Failed to send request: %v", err)
+} else {
+    fmt.Printf("Received response: %s\n", string(response))
 }
 ```
 
-Note: The node whitelist feature uses libp2p's PeerFilter mechanism, which controls which nodes can participate in pub/sub topics. It does not prevent network-level connections between nodes.
+## 配置选项
 
-### Extended Message Filtering
+### NetworkConfig 配置说明
 
-For more advanced filtering requirements, you can use the ExtendedMessageFilter:
+| 字段名 | 类型 | 说明 | 默认值 |
+|-------|------|------|--------|
+| Host | string | 监听地址 | "0.0.0.0" |
+| Port | int | 监听端口 | 0 |
+| MaxPeers | int | 最大连接数 | 100 |
+| PrivateKeyPath | string | 私钥文件路径 | "" |
+| BootstrapPeers | []string | Bootstrap节点地址列表 | 空数组 |
+| PeerWhitelist | []string | 节点白名单(节点ID字符串列表) | 空数组 |
+| LogConfig | *log.LogConfig | 日志配置 | nil |
+| DisableMDNS | bool | 是否禁用MDNS发现功能 | false (使用NewNetworkConfig()创建时) |
+
+**注意**: 当直接创建NetworkConfig结构体时，DisableMDNS的零值为false，表示默认启用MDNS。建议使用network.NewNetworkConfig()函数创建配置实例以获得正确的默认值。
+
+## API参考
+
+### NetworkInterface 接口
 
 ```go
-extendedFilter := &network.ExtendedMessageFilter{
-    Whitelist: map[string]bool{
-        "allowed-peer-id": true,
-    },
-    ContentFilter: func(msg network.NetMessage) bool {
-        // Custom content filtering logic
-        return !bytes.Contains(msg.Data, []byte("blocked"))
-    },
+type NetworkInterface interface {
+    // Run 启动网络模块并运行
+    Run(ctx context.Context) error
+
+    // BroadcastMessage 广播消息到指定主题
+    BroadcastMessage(topic string, data []byte) error
+
+    // RegisterMessageHandler 注册广播消息处理器
+    RegisterMessageHandler(topic string, handler MessageHandler)
+
+    // RegisterRequestHandler 注册点对点请求处理器
+    RegisterRequestHandler(requestType string, handler RequestHandler)
+
+    // SendRequest 发送点对点请求
+    SendRequest(peerID string, requestType string, data []byte) ([]byte, error)
+
+    // ConnectToPeer 连接到指定节点
+    ConnectToPeer(addr string) error
+
+    // GetPeers 获取连接的节点列表
+    GetPeers() []string
+
+    // GetLocalAddresses 获取本地节点的地址列表
+    GetLocalAddresses() []string
+
+    // GetLocalPeerID 获取本地节点的Peer ID
+    GetLocalPeerID() string
+
+    // RegisterMessageFilter 注册广播消息过滤器
+    RegisterMessageFilter(topic string, filter MessageFilter)
 }
-
-net.RegisterExtendedMessageFilter("chat", extendedFilter)
 ```
 
-### Logging
-
-The library includes a flexible logging system based on Go's slog package. You can use it in two ways:
-
-1. **Using GetLogger() (deprecated but still supported)**:
-```go
-logger := net.GetLogManager().GetLogger("mymodule")
-logger.Info("This is a log message")
-```
-
-2. **Using With() method (recommended)**:
-```go
-logger := net.GetLogManager().With("module", "mymodule")
-logger.Info("This is a log message")
-
-// You can also chain With() calls
-handlerLogger := logger.With("component", "handler")
-handlerLogger.Debug("Processing request", "from", peerID)
-```
-
-## API Reference
-
-### Network Interface
-
-- `Run(ctx context.Context) error` - Start the network
-- `BroadcastMessage(topic string, data []byte) error` - Broadcast message to topic
-- `RegisterMessageHandler(topic string, handler MessageHandler)` - Register message handler
-- `RegisterRequestHandler(requestType string, handler RequestHandler)` - Register request handler
-- `SendRequest(peerID string, requestType string, data []byte) ([]byte, error)` - Send point-to-point request
-- `ConnectToPeer(addr string) error` - Connect to peer
-- `GetPeers() []string` - Get connected peers
-- `GetLocalAddresses() []string` - Get local addresses
-- `GetLocalPeerID() string` - Get local peer ID
-- `RegisterMessageFilter(topic string, filter MessageFilter)` - Register message filter
-- `RegisterExtendedMessageFilter(topic string, filter *ExtendedMessageFilter)` - Register extended message filter
-- `GetLogManager() log.LogManager` - Get the log manager
-
-### Logging Configuration
-
-The library includes a flexible logging system based on Go's slog package:
-
-- `LogConfig` - Main logging configuration structure
-- `ModuleConfig` - Module-specific logging configuration
-- Log levels: DEBUG, INFO, WARN, ERROR, CRITICAL
-- Output formats: TEXT, JSON
-- Module-specific prefixes and levels
-
-## Testing
-
-The library includes comprehensive tests for all functionality:
+## 运行示例
 
 ```bash
-go test -v ./tests/...
+# 运行基本示例
+go run examples/base/basic_example.go
+
+# 运行双节点示例
+go run examples/two_node/two_node_example.go
+
+# 运行MDNS配置示例
+go run examples/mdns/mdns_example.go
 ```
 
-Unit tests for the logging system:
+## 测试
 
 ```bash
-go test -v ./log/...
+# 运行单元测试
+go test -v ./network/...
 ```
 
-## License
+## 依赖
+
+- [go-libp2p](https://github.com/libp2p/go-libp2p) - libp2p Go实现
+- [go-libp2p-pubsub](https://github.com/libp2p/go-libp2p-pubsub) - libp2p发布/订阅系统
+- [go-libp2p-kad-dht](https://github.com/libp2p/go-libp2p-kad-dht) - Kademlia DHT实现
+
+## 许可证
 
 MIT

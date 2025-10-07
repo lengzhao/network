@@ -106,12 +106,30 @@ func TestMessageFilterBasic(t *testing.T) {
 	cleanupNetworks(context.Background(), cancel1, n1, n2)
 }
 
+// createTestNetwork 创建测试网络实例
+func createTestNetworkNotDhtMdns(t *testing.T, host string, port int) network.NetworkInterface {
+	cfg := &network.NetworkConfig{
+		Host:        host,
+		Port:        port,
+		MaxPeers:    10,
+		DisableMDNS: false,
+		DisableDHT:  false,
+	}
+
+	n, err := network.New(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create network: %v", err)
+	}
+
+	return n
+}
+
 // TestMessageFilterNoForward 过滤后不转发测试
 func TestMessageFilterNoForward(t *testing.T) {
 	// 创建三个网络实例Node1、Node2和Node3，使用随机端口
-	n1 := createTestNetwork(t, "127.0.0.1", 0)
-	n2 := createTestNetwork(t, "127.0.0.1", 0)
-	n3 := createTestNetwork(t, "127.0.0.1", 0)
+	n1 := createTestNetworkNotDhtMdns(t, "127.0.0.1", 0)
+	n2 := createTestNetworkNotDhtMdns(t, "127.0.0.1", 0)
+	n3 := createTestNetworkNotDhtMdns(t, "127.0.0.1", 0)
 
 	// 启动三个网络实例的运行上下文
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -164,6 +182,12 @@ func TestMessageFilterNoForward(t *testing.T) {
 		return !bytes.Contains(msg.Data, []byte("do-not-forward"))
 	})
 
+	collector2 := &messageCollector{}
+	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
+		collector2.addMessage(msg)
+		return nil
+	})
+
 	// 在Node3上注册消息处理器
 	collector3 := &messageCollector{}
 	n3.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
@@ -198,6 +222,11 @@ func TestMessageFilterNoForward(t *testing.T) {
 
 	// 等待消息传递
 	time.Sleep(2 * time.Second)
+
+	messages2 := collector2.getMessages()
+	if len(messages2) == 0 {
+		t.Error("Node2 did not receive the normal message")
+	}
 
 	// 验证Node3成功接收到该消息
 	messages3 = collector3.getMessages()

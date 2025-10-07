@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -63,6 +64,11 @@ var _ NetworkInterface = (*Network)(nil)
 
 // New 创建新的网络实例
 func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
+	// 如果配置为nil，使用默认配置
+	if cfg == nil {
+		cfg = NewNetworkConfig()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// 初始化日志管理器
@@ -122,11 +128,6 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 		libp2p.DefaultTransports,
 		// 尝试使用uPNP为NAT主机开放端口
 		libp2p.NATPortMap(),
-		// 让此主机使用DHT查找其他主机，并设置bootstrap节点
-		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			dhtInstance, err := dht.New(context.Background(), h, dht.BootstrapPeers(bootstrapPeers...))
-			return dhtInstance, err
-		}),
 		// 启用NAT服务以帮助其他节点检测NAT
 		libp2p.EnableNATService(),
 		// 启用自动中继
@@ -135,6 +136,12 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 		libp2p.EnableHolePunching(),
 		// 使用连接管理器
 		libp2p.ConnectionManager(connManager),
+	}
+	if !cfg.DisableDHT {
+		options = append(options, libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
+			dhtInstance, err := dht.New(context.Background(), h, dht.BootstrapPeers(bootstrapPeers...))
+			return dhtInstance, err
+		}))
 	}
 	options = append(options, ops...)
 
@@ -180,15 +187,19 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 
 // Run 运行网络
 func (n *Network) Run(ctx context.Context) error {
-	// 启动mDNS发现
-	n.startMDNSDiscovery()
+	// 根据配置决定是否启动mDNS发现
+	if !n.config.DisableMDNS {
+		n.startMDNSDiscovery()
+	} else {
+		n.logManager.With("module", "network").Info("mDNS discovery is disabled in configuration")
+	}
 
 	n.logManager.With("module", "network").Info("network started", "addresses", n.GetLocalAddresses())
 
 	// 等待context取消
 	<-ctx.Done()
 
-	// 停止mDNS服务
+	// 停止mDNS服务（如果已启动）
 	if n.mdnsService != nil {
 		n.mdnsService.Close()
 	}
@@ -464,34 +475,32 @@ func (n *Network) RegisterExtendedMessageFilter(topic string, filter *ExtendedMe
 
 // handleRequest 处理点对点请求
 func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
+	// 使用defer确保流在函数退出时被正确关闭
+	defer stream.Close()
+
 	n.logManager.With("module", "network.request").Info("handling request from peer", "peer", stream.Conn().RemotePeer().String())
 
-	// 读取请求数据 - 支持大数据量
-	var data []byte
-	buffer := make([]byte, 4096) // 4KB缓冲区
+	// 设置读取超时
+	if err := stream.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		n.logManager.With("module", "network.request").Error("failed to set read deadline", "error", err)
+		return
+	}
 
-	// 读取所有可用数据
-	for {
-		bytesRead, err := stream.Read(buffer)
-		if bytesRead > 0 {
-			data = append(data, buffer[:bytesRead]...)
-		}
-		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			n.logManager.With("module", "network.request").Error("failed to read request data", "error", err)
-			stream.Close()
-			return
-		}
-		if bytesRead == 0 {
-			break
-		}
+	// 使用更高效的IO读取方式
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		n.logManager.With("module", "network.request").Error("failed to read request data", "error", err)
+		return
+	}
+
+	// 重置超时设置，准备写入响应
+	if err := stream.SetWriteDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		n.logManager.With("module", "network.request").Error("failed to set write deadline", "error", err)
+		return
 	}
 
 	if len(data) == 0 {
 		n.logManager.With("module", "network.request").Warn("received empty request data")
-		stream.Close()
 		return
 	}
 
@@ -499,18 +508,22 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	var req Request
 	if err := req.Deserialize(data); err != nil {
 		n.logManager.With("module", "network.request").Error("failed to deserialize request", "error", err)
-		stream.Close()
+		// 发送错误响应
+		resp := Response{
+			Type: "error",
+			Data: []byte("failed to deserialize request: " + err.Error()),
+		}
+		respBytes, _ := resp.Serialize()
+		if _, err := stream.Write(respBytes); err != nil {
+			n.logManager.With("module", "network.request").Error("failed to send error response", "error", err)
+		}
 		return
 	}
 
 	n.logManager.With("module", "network.request").Info("parsed request", "type", req.Type, "data_length", len(req.Data))
 
-	// 打印当前注册的处理器（用于调试）
+	// 获取请求处理器
 	n.requestMu.RLock()
-	n.logManager.With("module", "network.request").Debug("currently registered handlers", "count", len(n.requestHandlers))
-	for k := range n.requestHandlers {
-		n.logManager.With("module", "network.request").Debug("handler for type", "type", k)
-	}
 	handler, exists := n.requestHandlers[req.Type]
 	n.requestMu.RUnlock()
 
@@ -525,10 +538,10 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		if _, err := stream.Write(respBytes); err != nil {
 			n.logManager.With("module", "network.request").Error("failed to send error response", "error", err)
 		}
-		stream.Close()
 		return
 	}
 
+	// 处理请求
 	respData, err := handler(stream.Conn().RemotePeer().String(), req)
 	if err != nil {
 		n.logManager.With("module", "network.request").Error("failed to process request", "error", err)
@@ -541,7 +554,6 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		if _, err := stream.Write(respBytes); err != nil {
 			n.logManager.With("module", "network.request").Error("failed to send error response", "error", err)
 		}
-		stream.Close()
 		return
 	}
 
@@ -553,7 +565,15 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	respBytes, err := resp.Serialize()
 	if err != nil {
 		n.logManager.With("module", "network.request").Error("failed to serialize response", "error", err)
-		stream.Close()
+		// 发送序列化错误响应
+		errorResp := Response{
+			Type: "error",
+			Data: []byte("failed to serialize response: " + err.Error()),
+		}
+		errorRespBytes, _ := errorResp.Serialize()
+		if _, err := stream.Write(errorRespBytes); err != nil {
+			n.logManager.With("module", "network.request").Error("failed to send serialization error response", "error", err)
+		}
 		return
 	}
 
@@ -562,10 +582,8 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		n.logManager.With("module", "network.request").Error("failed to send response", "error", err)
 	} else {
 		n.logManager.With("module", "network.request").Info("response sent successfully")
+		stream.CloseWrite()
 	}
-
-	// 确保数据被刷新并关闭流
-	stream.Close()
 }
 
 // RegisterRequestHandler 注册点对点请求处理器
@@ -592,6 +610,11 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 	}
 	defer stream.Close()
 
+	// 设置写入超时
+	if err := stream.SetWriteDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return nil, fmt.Errorf("failed to set write deadline: %w", err)
+	}
+
 	// 构造请求
 	req := Request{
 		Type: requestType,
@@ -610,29 +633,27 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 	}
 
 	// 确保请求数据被发送
-	stream.CloseWrite()
+	if err := stream.CloseWrite(); err != nil {
+		return nil, fmt.Errorf("failed to close write: %w", err)
+	}
 
-	// 读取响应
-	var responseData []byte
-	buffer := make([]byte, 4096)
-	for {
-		bytesRead, err := stream.Read(buffer)
-		if bytesRead > 0 {
-			responseData = append(responseData, buffer[:bytesRead]...)
-		}
-		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			n.logManager.With("module", "network.request").Error("failed to read response", "error", err)
-			return nil, fmt.Errorf("failed to read response: %w", err)
-		}
-		if bytesRead == 0 {
-			break
-		}
+	// 设置读取超时
+	if err := stream.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return nil, fmt.Errorf("failed to set read deadline: %w", err)
+	}
+
+	// 使用更高效的IO读取方式
+	responseData, err := io.ReadAll(stream)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	n.logManager.With("module", "network.request").Info("read response", "bytes_read", len(responseData))
+
+	// 检查是否有响应数据
+	if len(responseData) == 0 {
+		return nil, fmt.Errorf("empty response received")
+	}
 
 	// 解析响应
 	var resp Response
