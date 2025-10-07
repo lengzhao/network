@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -22,6 +21,8 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
+
+	"github.com/lengzhao/network/log"
 )
 
 // Network 网络层 - 基于libp2p的现代化P2P网络
@@ -30,6 +31,9 @@ type Network struct {
 	host   host.Host
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// 日志管理器
+	logManager log.LogManager
 
 	// DHT自动管理（由libp2p.Routing自动处理）
 
@@ -43,9 +47,9 @@ type Network struct {
 	handlersMu      sync.RWMutex
 
 	// 消息过滤
-	messageFilters map[string]MessageFilter
+	messageFilters  map[string]MessageFilter
 	extendedFilters map[string]*ExtendedMessageFilter
-	filtersMu      sync.RWMutex
+	filtersMu       sync.RWMutex
 
 	// 点对点请求处理
 	requestHandlers map[string]RequestHandler
@@ -61,11 +65,14 @@ var _ NetworkInterface = (*Network)(nil)
 func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// 初始化日志管理器
+	logManager := log.NewLogManager(cfg.LogConfig)
+
 	// 获取私钥
-	priv, err := getOrGeneratePrivateKey(cfg.PrivateKeyPath)
+	priv, err := getOrGeneratePrivateKey(cfg.PrivateKeyPath, logManager)
 	if err != nil {
 		cancel()
-		log.Printf("failed to get private key: %v", err)
+		logManager.With("module", "network").Error("failed to get private key", "error", err)
 		return nil, fmt.Errorf("failed to get private key: %w", err)
 	}
 
@@ -77,7 +84,7 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 	)
 	if err != nil {
 		cancel()
-		log.Printf("failed to create connection manager: %v", err)
+		logManager.With("module", "network").Error("failed to create connection manager", "error", err)
 		return nil, fmt.Errorf("failed to create connection manager: %w", err)
 	}
 
@@ -86,13 +93,13 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 	for _, peerAddr := range cfg.BootstrapPeers {
 		maddr, err := multiaddr.NewMultiaddr(peerAddr)
 		if err != nil {
-			log.Printf("failed to parse bootstrap peer address: %v, error: %v", peerAddr, err)
+			logManager.With("module", "network").Warn("failed to parse bootstrap peer address", "address", peerAddr, "error", err)
 			continue
 		}
 
 		addrInfo, err := peer.AddrInfoFromP2pAddr(maddr)
 		if err != nil {
-			log.Printf("failed to parse bootstrap peer info: %v, error: %v", peerAddr, err)
+			logManager.With("module", "network").Warn("failed to parse bootstrap peer info", "address", peerAddr, "error", err)
 			continue
 		}
 
@@ -137,7 +144,7 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 	)
 	if err != nil {
 		cancel()
-		log.Printf("failed to create libp2p host: %v", err)
+		logManager.With("module", "network").Error("failed to create libp2p host", "error", err)
 		return nil, fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
@@ -146,6 +153,7 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 		host:            host,
 		ctx:             ctx,
 		cancel:          cancel,
+		logManager:      logManager,
 		messageHandlers: make(map[string]MessageHandler),
 		messageFilters:  make(map[string]MessageFilter),
 		extendedFilters: make(map[string]*ExtendedMessageFilter),
@@ -158,7 +166,7 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 	// 初始化Gossipsub
 	if err := n.initializeGossipsub(); err != nil {
 		cancel()
-		log.Printf("failed to initialize Gossipsub: %v", err)
+		logManager.With("module", "network").Error("failed to initialize Gossipsub", "error", err)
 		return nil, fmt.Errorf("failed to initialize Gossipsub: %w", err)
 	}
 
@@ -175,7 +183,7 @@ func (n *Network) Run(ctx context.Context) error {
 	// 启动mDNS发现
 	n.startMDNSDiscovery()
 
-	log.Printf("network started, listening on: %v", n.GetLocalAddresses())
+	n.logManager.With("module", "network").Info("network started", "addresses", n.GetLocalAddresses())
 
 	// 等待context取消
 	<-ctx.Done()
@@ -193,6 +201,11 @@ func (n *Network) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// GetLogManager 获取日志管理器
+func (n *Network) GetLogManager() log.LogManager {
+	return n.logManager
+}
+
 // initializeGossipsub 初始化Gossipsub
 func (n *Network) initializeGossipsub() error {
 	// 创建PeerFilter函数，如果配置了白名单，则只允许白名单中的节点参与通信
@@ -203,7 +216,7 @@ func (n *Network) initializeGossipsub() error {
 		for _, peerID := range n.config.PeerWhitelist {
 			whitelist[peerID] = true
 		}
-		
+
 		// 创建PeerFilter函数
 		peerFilter = func(pid peer.ID, topic string) bool {
 			// 检查节点是否在白名单中
@@ -338,7 +351,7 @@ func (n *Network) handleSubscription(topicName string, subscription *pubsub.Subs
 			if err == context.Canceled {
 				return
 			}
-			log.Printf("failed to receive message: %v", err)
+			n.logManager.With("module", "network.pubsub").Error("failed to receive message", "error", err)
 			continue
 		}
 
@@ -354,17 +367,17 @@ func (n *Network) handleSubscription(topicName string, subscription *pubsub.Subs
 func (n *Network) processPubsubMessage(topicName string, msg *pubsub.Message) {
 	// 应用过滤器
 	n.filtersMu.RLock()
-	
+
 	// 首先检查是否有扩展过滤器
 	extendedFilter, extendedFilterExists := n.extendedFilters[topicName]
-	
+
 	// 如果没有扩展过滤器，检查是否有普通过滤器
 	var filter MessageFilter
 	var filterExists bool
 	if !extendedFilterExists {
 		filter, filterExists = n.messageFilters[topicName]
 	}
-	
+
 	n.filtersMu.RUnlock()
 
 	// 应用扩展过滤器
@@ -409,7 +422,7 @@ func (n *Network) processPubsubMessage(topicName string, msg *pubsub.Message) {
 	}
 
 	if err := handler(msg.ReceivedFrom.String(), netMsg); err != nil {
-		log.Printf("failed to process message: %v", err)
+		n.logManager.With("module", "network.pubsub").Error("failed to process message", "error", err)
 	}
 }
 
@@ -427,9 +440,9 @@ func (n *Network) RegisterMessageHandler(topic string, handler MessageHandler) {
 	if !exists {
 		go func() {
 			if err := n.subscribeToTopicInternal(topic); err != nil {
-				log.Printf("failed to auto-subscribe to topic: %s, error: %v", topic, err)
+				n.logManager.With("module", "network.pubsub").Warn("failed to auto-subscribe to topic", "topic", topic, "error", err)
 			} else {
-				log.Printf("auto-subscribed to topic: %s", topic)
+				n.logManager.With("module", "network.pubsub").Info("auto-subscribed to topic", "topic", topic)
 			}
 		}()
 	}
@@ -451,7 +464,7 @@ func (n *Network) RegisterExtendedMessageFilter(topic string, filter *ExtendedMe
 
 // handleRequest 处理点对点请求
 func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
-	log.Printf("handling request from peer: %s", stream.Conn().RemotePeer().String())
+	n.logManager.With("module", "network.request").Info("handling request from peer", "peer", stream.Conn().RemotePeer().String())
 
 	// 读取请求数据 - 支持大数据量
 	var data []byte
@@ -467,7 +480,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 			if err.Error() == "EOF" {
 				break
 			}
-			log.Printf("failed to read request data: %v", err)
+			n.logManager.With("module", "network.request").Error("failed to read request data", "error", err)
 			stream.Close()
 			return
 		}
@@ -477,7 +490,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	}
 
 	if len(data) == 0 {
-		log.Printf("received empty request data")
+		n.logManager.With("module", "network.request").Warn("received empty request data")
 		stream.Close()
 		return
 	}
@@ -485,24 +498,24 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	// 解析请求
 	var req Request
 	if err := req.Deserialize(data); err != nil {
-		log.Printf("failed to deserialize request: %v", err)
+		n.logManager.With("module", "network.request").Error("failed to deserialize request", "error", err)
 		stream.Close()
 		return
 	}
 
-	log.Printf("parsed request, type: %s, data length: %d", req.Type, len(req.Data))
+	n.logManager.With("module", "network.request").Info("parsed request", "type", req.Type, "data_length", len(req.Data))
 
 	// 打印当前注册的处理器（用于调试）
 	n.requestMu.RLock()
-	log.Printf("currently registered handlers: %v", len(n.requestHandlers))
+	n.logManager.With("module", "network.request").Debug("currently registered handlers", "count", len(n.requestHandlers))
 	for k := range n.requestHandlers {
-		log.Printf("  handler for type: %s", k)
+		n.logManager.With("module", "network.request").Debug("handler for type", "type", k)
 	}
 	handler, exists := n.requestHandlers[req.Type]
 	n.requestMu.RUnlock()
 
 	if !exists {
-		log.Printf("no handler found for request type: %s", req.Type)
+		n.logManager.With("module", "network.request").Warn("no handler found for request type", "type", req.Type)
 		// 发送错误响应
 		resp := Response{
 			Type: "error",
@@ -510,7 +523,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		}
 		respBytes, _ := resp.Serialize()
 		if _, err := stream.Write(respBytes); err != nil {
-			log.Printf("failed to send error response: %v", err)
+			n.logManager.With("module", "network.request").Error("failed to send error response", "error", err)
 		}
 		stream.Close()
 		return
@@ -518,7 +531,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 
 	respData, err := handler(stream.Conn().RemotePeer().String(), req)
 	if err != nil {
-		log.Printf("failed to process request: %v", err)
+		n.logManager.With("module", "network.request").Error("failed to process request", "error", err)
 		// 发送错误响应
 		resp := Response{
 			Type: "error",
@@ -526,7 +539,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 		}
 		respBytes, _ := resp.Serialize()
 		if _, err := stream.Write(respBytes); err != nil {
-			log.Printf("failed to send error response: %v", err)
+			n.logManager.With("module", "network.request").Error("failed to send error response", "error", err)
 		}
 		stream.Close()
 		return
@@ -539,16 +552,16 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	}
 	respBytes, err := resp.Serialize()
 	if err != nil {
-		log.Printf("failed to serialize response: %v", err)
+		n.logManager.With("module", "network.request").Error("failed to serialize response", "error", err)
 		stream.Close()
 		return
 	}
 
-	log.Printf("sending response, type: %s, response bytes: %d", req.Type, len(respBytes))
+	n.logManager.With("module", "network.request").Info("sending response", "type", req.Type, "response_bytes", len(respBytes))
 	if _, err := stream.Write(respBytes); err != nil {
-		log.Printf("failed to send response: %v", err)
+		n.logManager.With("module", "network.request").Error("failed to send response", "error", err)
 	} else {
-		log.Printf("response sent successfully")
+		n.logManager.With("module", "network.request").Info("response sent successfully")
 	}
 
 	// 确保数据被刷新并关闭流
@@ -560,7 +573,7 @@ func (n *Network) RegisterRequestHandler(requestType string, handler RequestHand
 	n.requestMu.Lock()
 	defer n.requestMu.Unlock()
 	n.requestHandlers[requestType] = handler
-	log.Printf("registered request handler for type: %s", requestType)
+	n.logManager.With("module", "network.request").Info("registered request handler for type", "type", requestType)
 }
 
 // SendRequest 发送点对点请求
@@ -611,7 +624,7 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 			if err.Error() == "EOF" {
 				break
 			}
-			log.Printf("failed to read response: %v", err)
+			n.logManager.With("module", "network.request").Error("failed to read response", "error", err)
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 		if bytesRead == 0 {
@@ -619,7 +632,7 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 		}
 	}
 
-	log.Printf("read response, bytes read: %d", len(responseData))
+	n.logManager.With("module", "network.request").Info("read response", "bytes_read", len(responseData))
 
 	// 解析响应
 	var resp Response
@@ -636,13 +649,13 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 }
 
 // getOrGeneratePrivateKey 获取或生成私钥
-func getOrGeneratePrivateKey(keyPath string) (crypto.PrivKey, error) {
+func getOrGeneratePrivateKey(keyPath string, logManager log.LogManager) (crypto.PrivKey, error) {
 	// 如果指定了私钥文件路径
 	if keyPath != "" {
 		// 检查文件是否存在
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 			// 文件不存在，生成新私钥并保存
-			log.Printf("private key file not found, generating new key: %s", keyPath)
+			logManager.With("module", "network.security").Info("private key file not found, generating new key", "path", keyPath)
 			priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate private key: %w", err)
@@ -653,7 +666,7 @@ func getOrGeneratePrivateKey(keyPath string) (crypto.PrivKey, error) {
 				return nil, fmt.Errorf("failed to save private key: %w", err)
 			}
 
-			log.Printf("new private key saved: %s", keyPath)
+			logManager.With("module", "network.security").Info("new private key saved", "path", keyPath)
 			return priv, nil
 		}
 
@@ -663,12 +676,12 @@ func getOrGeneratePrivateKey(keyPath string) (crypto.PrivKey, error) {
 			return nil, fmt.Errorf("failed to read private key file: %w", err)
 		}
 
-		log.Printf("private key loaded from file: %s", keyPath)
+		logManager.With("module", "network.security").Info("private key loaded from file", "path", keyPath)
 		return priv, nil
 	}
 
 	// 没有指定文件路径，生成临时私钥
-	log.Printf("no private key path specified, generating temporary key")
+	logManager.With("module", "network.security").Info("no private key path specified, generating temporary key")
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate private key: %w", err)
@@ -733,11 +746,11 @@ func (n *Network) startMDNSDiscovery() {
 
 	// 启动mDNS服务
 	if err := n.mdnsService.Start(); err != nil {
-		log.Printf("failed to start mDNS service: %v", err)
+		n.logManager.With("module", "network.discovery").Error("failed to start mDNS service", "error", err)
 		return
 	}
 
-	log.Printf("mDNS service started with service name: _network_discovery")
+	n.logManager.With("module", "network.discovery").Info("mDNS service started with service name: _network_discovery")
 }
 
 // HandlePeerFound 实现mdns.Notifee接口，处理发现的节点
@@ -747,12 +760,12 @@ func (n *Network) HandlePeerFound(pi peer.AddrInfo) {
 		return
 	}
 
-	log.Printf("mDNS peer discovered, peer ID: %s, addresses: %v", pi.ID.String(), pi.Addrs)
+	n.logManager.With("module", "network.discovery").Info("mDNS peer discovered", "peer_id", pi.ID.String(), "addresses", pi.Addrs)
 
 	if err := n.host.Connect(n.ctx, pi); err != nil {
-		log.Printf("failed to connect to discovered peer, peer ID: %s, error: %v", pi.ID.String(), err)
+		n.logManager.With("module", "network.discovery").Warn("failed to connect to discovered peer", "peer_id", pi.ID.String(), "error", err)
 	} else {
-		log.Printf("successfully connected to discovered peer, peer ID: %s", pi.ID.String())
+		n.logManager.With("module", "network.discovery").Info("successfully connected to discovered peer", "peer_id", pi.ID.String())
 	}
 }
 
@@ -761,11 +774,11 @@ func (n *Network) Listen(libp2pnetwork.Network, multiaddr.Multiaddr)      {}
 func (n *Network) ListenClose(libp2pnetwork.Network, multiaddr.Multiaddr) {}
 func (n *Network) Connected(net libp2pnetwork.Network, conn libp2pnetwork.Conn) {
 	peerID := conn.RemotePeer()
-	log.Printf("peer connected, peer ID: %s", peerID.String())
+	n.logManager.With("module", "network.connection").Info("peer connected", "peer_id", peerID.String())
 }
 func (n *Network) Disconnected(net libp2pnetwork.Network, conn libp2pnetwork.Conn) {
 	peerID := conn.RemotePeer()
-	log.Printf("peer disconnected, peer ID: %s", peerID.String())
+	n.logManager.With("module", "network.connection").Info("peer disconnected", "peer_id", peerID.String())
 }
 func (n *Network) OpenedStream(libp2pnetwork.Network, libp2pnetwork.Stream) {}
 func (n *Network) ClosedStream(libp2pnetwork.Network, libp2pnetwork.Stream) {}

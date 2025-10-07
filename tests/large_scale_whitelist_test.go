@@ -22,7 +22,7 @@ func TestLargeScaleWhitelist(t *testing.T) {
 		maxPeers       = 8  // 每个节点最大连接数
 	)
 
-	t.Logf("Creating large scale network with %d nodes, %d whitelist nodes, max %d connections per node", 
+	t.Logf("Creating large scale network with %d nodes, %d whitelist nodes, max %d connections per node",
 		totalNodes, whitelistNodes, maxPeers)
 
 	// 创建节点数组
@@ -192,7 +192,7 @@ func TestLargeScaleWhitelist(t *testing.T) {
 	}
 
 	t.Logf("Non-whitelist broadcast: %d nodes received the message (expected at most %d whitelist nodes)", receivedCount2, whitelistNodes)
-	
+
 	// 验证接收节点数不超过白名单节点数（允许少量超出）
 	if receivedCount2 <= whitelistNodes+2 {
 		t.Log("✓ Non-whitelist node broadcast restriction test passed")

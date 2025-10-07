@@ -10,6 +10,7 @@ A modern P2P network library based on libp2p for Go applications.
 - Message filtering and content-based filtering
 - Node whitelist for access control
 - Extensible architecture
+- Flexible logging system based on Go's slog package
 
 ## Installation
 
@@ -24,11 +25,23 @@ go get github.com/lengzhao/network
 ```go
 import "github.com/lengzhao/network"
 
-// Create network configuration
+// Create network configuration with logging
+logConfig := &network.LogConfig{
+    Level:      network.INFO,
+    OutputFile: "/var/log/network.log",
+    Format:     network.JSON,
+    Modules: map[string]network.ModuleConfig{
+        "network.pubsub": {Level: network.DEBUG},
+        "network.security": {Level: network.WARN},
+    },
+    Enabled: true,
+}
+
 cfg := &network.NetworkConfig{
     Host:     "127.0.0.1",
     Port:     8080,
     MaxPeers: 100,
+    LogConfig: logConfig,
 }
 
 // Create network instance
@@ -55,6 +68,10 @@ net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) err
 
 // Broadcast message
 net.BroadcastMessage("chat", []byte("Hello, world!"))
+
+// Use the new simplified logging approach
+logger := net.GetLogManager().With("module", "chat")
+logger.Info("Chat handler initialized")
 ```
 
 ### Message Filtering
@@ -105,6 +122,26 @@ extendedFilter := &network.ExtendedMessageFilter{
 net.RegisterExtendedMessageFilter("chat", extendedFilter)
 ```
 
+### Logging
+
+The library includes a flexible logging system based on Go's slog package. You can use it in two ways:
+
+1. **Using GetLogger() (deprecated but still supported)**:
+```go
+logger := net.GetLogManager().GetLogger("mymodule")
+logger.Info("This is a log message")
+```
+
+2. **Using With() method (recommended)**:
+```go
+logger := net.GetLogManager().With("module", "mymodule")
+logger.Info("This is a log message")
+
+// You can also chain With() calls
+handlerLogger := logger.With("component", "handler")
+handlerLogger.Debug("Processing request", "from", peerID)
+```
+
 ## API Reference
 
 ### Network Interface
@@ -120,6 +157,17 @@ net.RegisterExtendedMessageFilter("chat", extendedFilter)
 - `GetLocalPeerID() string` - Get local peer ID
 - `RegisterMessageFilter(topic string, filter MessageFilter)` - Register message filter
 - `RegisterExtendedMessageFilter(topic string, filter *ExtendedMessageFilter)` - Register extended message filter
+- `GetLogManager() log.LogManager` - Get the log manager
+
+### Logging Configuration
+
+The library includes a flexible logging system based on Go's slog package:
+
+- `LogConfig` - Main logging configuration structure
+- `ModuleConfig` - Module-specific logging configuration
+- Log levels: DEBUG, INFO, WARN, ERROR, CRITICAL
+- Output formats: TEXT, JSON
+- Module-specific prefixes and levels
 
 ## Testing
 
@@ -127,6 +175,12 @@ The library includes comprehensive tests for all functionality:
 
 ```bash
 go test -v ./tests/...
+```
+
+Unit tests for the logging system:
+
+```bash
+go test -v ./log/...
 ```
 
 ## License

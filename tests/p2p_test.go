@@ -2,51 +2,11 @@ package tests
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/lengzhao/network"
 )
-
-// responseTracker 用于跟踪点对点请求的响应
-type responseTracker struct {
-	responses [][]byte
-	errors    []error
-	mu        sync.Mutex
-}
-
-func (rt *responseTracker) addResponse(response []byte, err error) {
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
-	if err != nil {
-		rt.errors = append(rt.errors, err)
-	} else {
-		rt.responses = append(rt.responses, response)
-	}
-}
-
-func (rt *responseTracker) getResponseCount() int {
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
-	return len(rt.responses)
-}
-
-func (rt *responseTracker) getErrorCount() int {
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
-	return len(rt.errors)
-}
-
-// waitForMessage 等待消息处理完成
-func waitForMessage(t *testing.T, ch chan bool, timeout time.Duration) bool {
-	select {
-	case <-ch:
-		return true
-	case <-time.After(timeout):
-		return false
-	}
-}
 
 // TestPointToPointSend 测试点对点消息发送功能
 func TestPointToPointSend(t *testing.T) {

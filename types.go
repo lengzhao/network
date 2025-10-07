@@ -3,6 +3,8 @@ package network
 import (
 	"context"
 	"fmt"
+
+	"github.com/lengzhao/network/log"
 )
 
 // NetMessage 广播模式下的消息结构
@@ -138,4 +140,7 @@ type NetworkInterface interface {
 
 	// RegisterExtendedMessageFilter 注册扩展消息过滤器
 	RegisterExtendedMessageFilter(topic string, filter *ExtendedMessageFilter)
+
+	// GetLogManager 获取日志管理器
+	GetLogManager() log.LogManager
 }

@@ -66,7 +66,7 @@ func connectNetworks(t *testing.T, n1, n2 network.NetworkInterface) {
 }
 
 // waitForConnection 等待连接建立
-func waitForConnection(t *testing.T, n1, n2 network.NetworkInterface, timeout time.Duration) bool {
+func waitForConnection(_ *testing.T, n1, n2 network.NetworkInterface, timeout time.Duration) bool {
 	timeoutChan := time.After(timeout)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -78,7 +78,7 @@ func waitForConnection(t *testing.T, n1, n2 network.NetworkInterface, timeout ti
 		case <-ticker.C:
 			peers1 := n1.GetPeers()
 			peers2 := n2.GetPeers()
-			
+
 			if len(peers1) > 0 && len(peers2) > 0 {
 				return true
 			}
@@ -87,7 +87,7 @@ func waitForConnection(t *testing.T, n1, n2 network.NetworkInterface, timeout ti
 }
 
 // cleanupNetworks 清理网络资源
-func cleanupNetworks(ctx context.Context, cancel context.CancelFunc, networks ...network.NetworkInterface) {
+func cleanupNetworks(_ context.Context, cancel context.CancelFunc, _ ...network.NetworkInterface) {
 	// 取消上下文以停止网络
 	cancel()
 
