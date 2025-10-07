@@ -44,6 +44,7 @@ type Network struct {
 
 	// 消息过滤
 	messageFilters map[string]MessageFilter
+	extendedFilters map[string]*ExtendedMessageFilter
 	filtersMu      sync.RWMutex
 
 	// 点对点请求处理
@@ -147,6 +148,7 @@ func New(cfg *NetworkConfig, ops ...libp2p.Option) (NetworkInterface, error) {
 		cancel:          cancel,
 		messageHandlers: make(map[string]MessageHandler),
 		messageFilters:  make(map[string]MessageFilter),
+		extendedFilters: make(map[string]*ExtendedMessageFilter),
 		requestHandlers: make(map[string]RequestHandler),
 		topics:          make(map[string]*pubsub.Topic),
 	}
@@ -193,8 +195,27 @@ func (n *Network) Run(ctx context.Context) error {
 
 // initializeGossipsub 初始化Gossipsub
 func (n *Network) initializeGossipsub() error {
-	// 创建Gossipsub实例
-	pubsubInstance, err := pubsub.NewGossipSub(n.ctx, n.host)
+	// 创建PeerFilter函数，如果配置了白名单，则只允许白名单中的节点参与通信
+	var peerFilter pubsub.PeerFilter
+	if len(n.config.PeerWhitelist) > 0 {
+		// 创建白名单映射以提高查找效率
+		whitelist := make(map[string]bool)
+		for _, peerID := range n.config.PeerWhitelist {
+			whitelist[peerID] = true
+		}
+		
+		// 创建PeerFilter函数
+		peerFilter = func(pid peer.ID, topic string) bool {
+			// 检查节点是否在白名单中
+			return whitelist[pid.String()]
+		}
+	} else {
+		// 如果没有配置白名单，使用默认的PeerFilter（允许所有节点）
+		peerFilter = pubsub.DefaultPeerFilter
+	}
+
+	// 创建Gossipsub实例，应用PeerFilter
+	pubsubInstance, err := pubsub.NewGossipSub(n.ctx, n.host, pubsub.WithPeerFilter(peerFilter))
 	if err != nil {
 		return fmt.Errorf("failed to create Gossipsub: %w", err)
 	}
@@ -333,10 +354,33 @@ func (n *Network) handleSubscription(topicName string, subscription *pubsub.Subs
 func (n *Network) processPubsubMessage(topicName string, msg *pubsub.Message) {
 	// 应用过滤器
 	n.filtersMu.RLock()
-	filter, filterExists := n.messageFilters[topicName]
+	
+	// 首先检查是否有扩展过滤器
+	extendedFilter, extendedFilterExists := n.extendedFilters[topicName]
+	
+	// 如果没有扩展过滤器，检查是否有普通过滤器
+	var filter MessageFilter
+	var filterExists bool
+	if !extendedFilterExists {
+		filter, filterExists = n.messageFilters[topicName]
+	}
+	
 	n.filtersMu.RUnlock()
 
-	if filterExists {
+	// 应用扩展过滤器
+	if extendedFilterExists {
+		netMsg := NetMessage{
+			From:  msg.ReceivedFrom.String(),
+			Topic: topicName,
+			Data:  msg.Data,
+		}
+
+		// 如果过滤器返回false，则丢弃消息
+		if !extendedFilter.Filter(netMsg) {
+			return
+		}
+	} else if filterExists {
+		// 应用普通过滤器
 		netMsg := NetMessage{
 			From:  msg.ReceivedFrom.String(),
 			Topic: topicName,
@@ -396,6 +440,13 @@ func (n *Network) RegisterMessageFilter(topic string, filter MessageFilter) {
 	n.filtersMu.Lock()
 	defer n.filtersMu.Unlock()
 	n.messageFilters[topic] = filter
+}
+
+// RegisterExtendedMessageFilter 注册扩展消息过滤器
+func (n *Network) RegisterExtendedMessageFilter(topic string, filter *ExtendedMessageFilter) {
+	n.filtersMu.Lock()
+	defer n.filtersMu.Unlock()
+	n.extendedFilters[topic] = filter
 }
 
 // handleRequest 处理点对点请求

@@ -7,4 +7,5 @@ type NetworkConfig struct {
 	MaxPeers       int      // 最大连接数
 	PrivateKeyPath string   // 私钥文件路径
 	BootstrapPeers []string // Bootstrap节点地址列表
+	PeerWhitelist  []string // 节点白名单(节点ID字符串列表)
 }
