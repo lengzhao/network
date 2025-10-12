@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	libp2pnetwork "github.com/libp2p/go-libp2p/core/network"
@@ -24,6 +26,9 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
 )
+
+// PeerScoreInspector Peer评分检查器接口
+// type PeerScoreInspector func(map[peer.ID]*pubsub.PeerScoreSnapshot) // 已移至types.go
 
 // Network 网络层 - 基于libp2p的现代化P2P网络
 type Network struct {
@@ -229,8 +234,49 @@ func (n *Network) Run(ctx context.Context) error {
 
 // initializeGossipsub 初始化Gossipsub
 func (n *Network) initializeGossipsub() error {
-	// 创建Gossipsub实例，使用默认的PeerFilter（允许所有节点）
-	pubsubInstance, err := pubsub.NewGossipSub(n.ctx, n.host)
+	var opts []pubsub.Option
+
+	// 启用消息签名以确保消息来源可验证
+	opts = append(opts, pubsub.WithMessageSignaturePolicy(pubsub.StrictSign))
+	opts = append(opts, pubsub.WithMessageIdFn(func(pmsg *pubsub_pb.Message) string {
+		// 使用消息数据和发送者ID生成唯一的消息ID
+		h := sha256.Sum256(pmsg.Data)
+		return string(h[:])
+	}))
+
+	// 如果启用了Peer评分，则配置Peer评分系统
+	if n.config.EnablePeerScoring {
+		// 设置Peer评分参数来控制发布权限
+		scoreParams := &pubsub.PeerScoreParams{
+			Topics: map[string]*pubsub.TopicScoreParams{},
+			AppSpecificScore: func(p peer.ID) float64 {
+				return n.config.AppSpecificScore
+			},
+			AppSpecificWeight:           1.0,
+			IPColocationFactorWeight:    n.config.IPColocationWeight,
+			IPColocationFactorThreshold: n.config.MaxIPColocation,
+			BehaviourPenaltyWeight:      n.config.BehaviourWeight,
+			BehaviourPenaltyDecay:       n.config.BehaviourDecay,
+			DecayInterval:               time.Hour,
+			DecayToZero:                 0.01,
+			RetainScore:                 24 * time.Hour,
+		}
+
+		// 设置Peer评分阈值
+		thresholds := &pubsub.PeerScoreThresholds{
+			GossipThreshold:             -100, // 低于此阈值时抑制gossip传播
+			PublishThreshold:            -200, // 低于此阈值时不应发布消息（必须 <= GossipThreshold）
+			GraylistThreshold:           -500, // 低于此阈值时完全抑制消息处理（必须 <= PublishThreshold）
+			AcceptPXThreshold:           1000, // 高于此阈值时接受PX
+			OpportunisticGraftThreshold: 50,   // 触发机会性graft的网格评分中位数阈值
+		}
+
+		opts = append(opts, pubsub.WithPeerScore(scoreParams, thresholds))
+
+	}
+
+	// 创建Gossipsub实例
+	pubsubInstance, err := pubsub.NewGossipSub(n.ctx, n.host, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create Gossipsub: %w", err)
 	}

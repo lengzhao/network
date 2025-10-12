@@ -134,6 +134,13 @@ if err != nil {
 | PeerWhitelist | []string | 节点白名单(节点ID字符串列表) | 空数组 |
 | LogConfig | *log.LogConfig | 日志配置 | nil |
 | DisableMDNS | bool | 是否禁用MDNS发现功能 | false (使用NewNetworkConfig()创建时) |
+| EnablePeerScoring | bool | 是否启用Peer评分 | true |
+| DiscoveryInterval | time.Duration | 节点发现间隔 | 1分钟 |
+| MaxIPColocation | int | 单个IP地址最大节点数 | 3 |
+| ScoreInspectInterval | time.Duration | 评分检查间隔 | 1分钟 |
+| IPColocationWeight | float64 | IP共置权重 | -0.1 |
+| BehaviourWeight | float64 | 行为权重 | -1.0 |
+| BehaviourDecay | float64 | 行为衰减因子 | 0.98 |
 
 **注意**: 当直接创建NetworkConfig结构体时，DisableMDNS的零值为false，表示默认启用MDNS。建议使用network.NewNetworkConfig()函数创建配置实例以获得正确的默认值。
 
@@ -172,12 +179,15 @@ type NetworkInterface interface {
 
     // RegisterMessageFilter 注册广播消息过滤器
     RegisterMessageFilter(topic string, filter MessageFilter)
+    
+    // RegisterPeerScoreInspector 注册Peer评分检查器
+    RegisterPeerScoreInspector(inspector PeerScoreInspector)
 }
 ```
 
 ## 运行示例
 
-```bash
+```
 # 运行基本示例
 go run examples/base/basic_example.go
 
@@ -190,7 +200,7 @@ go run examples/mdns/mdns_example.go
 
 ## 测试
 
-```bash
+```
 # 运行单元测试
 go test -v ./network/...
 ```
