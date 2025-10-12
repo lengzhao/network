@@ -4,11 +4,33 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 // 添加测试辅助函数和结构体
+
+// messageCollector 用于收集广播消息
+type messageCollector struct {
+	messages []NetMessage
+	mu       sync.Mutex
+}
+
+func (mc *messageCollector) addMessage(msg NetMessage) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.messages = append(mc.messages, msg)
+}
+
+func (mc *messageCollector) getMessages() []NetMessage {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	// 返回副本以避免数据竞争
+	result := make([]NetMessage, len(mc.messages))
+	copy(result, mc.messages)
+	return result
+}
 
 // createTestNetwork 创建测试网络实例
 func createTestNetwork(t *testing.T, host string, port int) NetworkInterface {
@@ -660,6 +682,103 @@ func TestP2PLargeData(t *testing.T) {
 	// 验证大数据在传输过程中没有损坏
 	if !bytes.Equal(response, responseData) {
 		t.Error("Response data content mismatch - data corruption detected")
+	}
+
+	// 清理资源
+	cleanupNetworks(context.Background(), cancel1, n1, n2)
+}
+
+// TestMessageFilterUnified 测试统一消息过滤机制
+func TestMessageFilterUnified(t *testing.T) {
+	// 创建两个网络实例Node1和Node2，使用随机端口
+	n1 := createTestNetwork(t, "127.0.0.1", 0)
+	n2 := createTestNetwork(t, "127.0.0.1", 0)
+
+	// 启动两个网络实例的运行上下文
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel1()
+	defer cancel2()
+
+	// 在goroutine中运行两个网络
+	go func() {
+		err := n1.Run(ctx1)
+		if err != nil && err != context.Canceled {
+			t.Errorf("Network 1 run failed with error: %v", err)
+		}
+	}()
+
+	go func() {
+		err := n2.Run(ctx2)
+		if err != nil && err != context.Canceled {
+			t.Errorf("Network 2 run failed with error: %v", err)
+		}
+	}()
+
+	// 等待网络启动
+	time.Sleep(500 * time.Millisecond)
+
+	// 建立Node1和Node2之间的连接
+	connectNetworks(t, n1, n2)
+
+	// 等待连接建立
+	if !waitForConnection(t, n1, n2, 5*time.Second) {
+		t.Fatal("Failed to establish connection between networks")
+	}
+
+	// 在Node2上注册消息处理器和消息过滤器，过滤器拒绝包含"filtered"关键字的消息
+	collector := &messageCollector{}
+
+	n2.RegisterMessageHandler("test-topic", func(from string, msg NetMessage) error {
+		collector.addMessage(msg)
+		return nil
+	})
+
+	n2.RegisterMessageFilter("test-topic", func(msg NetMessage) bool {
+		// 拒绝包含"filtered"关键字的消息
+		return !bytes.Contains(msg.Data, []byte("filtered"))
+	})
+
+	// 等待订阅建立
+	time.Sleep(1 * time.Second)
+
+	// 从Node1广播两条消息：一条包含"filtered"关键字，另一条不包含
+	filteredMessage := []byte("this message should be filtered")
+	normalMessage := []byte("this message should be received")
+
+	err := n1.BroadcastMessage("test-topic", filteredMessage)
+	if err != nil {
+		t.Fatalf("Failed to broadcast filtered message: %v", err)
+	}
+
+	err = n1.BroadcastMessage("test-topic", normalMessage)
+	if err != nil {
+		t.Fatalf("Failed to broadcast normal message: %v", err)
+	}
+
+	// 等待消息传递
+	time.Sleep(2 * time.Second)
+
+	// 验证Node2只处理不包含"filtered"关键字的消息
+	messages := collector.getMessages()
+
+	if len(messages) != 1 {
+		t.Errorf("Expected 1 message, got %d messages", len(messages))
+	}
+
+	// 验证Node2通过消息处理器接收到的消息数量正确
+	if len(messages) > 0 {
+		receivedMessage := messages[0]
+		if !bytes.Equal(receivedMessage.Data, normalMessage) {
+			t.Errorf("Received incorrect message. Expected: %s, Got: %s", string(normalMessage), string(receivedMessage.Data))
+		}
+	}
+
+	// 验证被过滤的消息没有被处理
+	for _, msg := range messages {
+		if bytes.Contains(msg.Data, []byte("filtered")) {
+			t.Error("Filtered message was incorrectly processed")
+		}
 	}
 
 	// 清理资源

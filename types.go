@@ -3,8 +3,6 @@ package network
 import (
 	"context"
 	"fmt"
-
-	"github.com/lengzhao/network/log"
 )
 
 // NetMessage 广播模式下的消息结构
@@ -83,29 +81,6 @@ type RequestHandler func(from string, req Request) ([]byte, error)
 // MessageFilter 用于过滤广播消息
 type MessageFilter func(msg NetMessage) bool
 
-// ExtendedMessageFilter 扩展的消息过滤器，支持节点白名单和内容过滤
-type ExtendedMessageFilter struct {
-	Whitelist     map[string]bool // 节点白名单
-	ContentFilter MessageFilter   // 内容过滤器
-}
-
-// Filter 应用过滤规则
-func (f *ExtendedMessageFilter) Filter(msg NetMessage) bool {
-	// 检查发送方是否在白名单中（如果配置了白名单）
-	if len(f.Whitelist) > 0 {
-		if !f.Whitelist[msg.From] {
-			return false
-		}
-	}
-
-	// 应用内容过滤器
-	if f.ContentFilter != nil {
-		return f.ContentFilter(msg)
-	}
-
-	return true
-}
-
 // NetworkInterface 网络接口，定义了所有对外提供的功能
 type NetworkInterface interface {
 	// Run 启动网络模块并运行
@@ -137,10 +112,4 @@ type NetworkInterface interface {
 
 	// RegisterMessageFilter 注册广播消息过滤器
 	RegisterMessageFilter(topic string, filter MessageFilter)
-
-	// RegisterExtendedMessageFilter 注册扩展消息过滤器
-	RegisterExtendedMessageFilter(topic string, filter *ExtendedMessageFilter)
-
-	// GetLogManager 获取日志管理器
-	GetLogManager() log.LogManager
 }

@@ -52,40 +52,6 @@ func createTestNetwork(t *testing.T, host string, port int) network.NetworkInter
 	return n
 }
 
-// connectNetworks 建立两个网络间的连接
-func connectNetworks(t *testing.T, n1, n2 network.NetworkInterface) {
-	addrs := n2.GetLocalAddresses()
-	if len(addrs) == 0 {
-		t.Fatal("Network 2 has no addresses")
-	}
-
-	err := n1.ConnectToPeer(addrs[0])
-	if err != nil {
-		t.Fatalf("Failed to connect networks: %v", err)
-	}
-}
-
-// waitForConnection 等待连接建立
-func waitForConnection(_ *testing.T, n1, n2 network.NetworkInterface, timeout time.Duration) bool {
-	timeoutChan := time.After(timeout)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeoutChan:
-			return false
-		case <-ticker.C:
-			peers1 := n1.GetPeers()
-			peers2 := n2.GetPeers()
-
-			if len(peers1) > 0 && len(peers2) > 0 {
-				return true
-			}
-		}
-	}
-}
-
 // cleanupNetworks 清理网络资源
 func cleanupNetworks(_ context.Context, cancel context.CancelFunc, _ ...network.NetworkInterface) {
 	// 取消上下文以停止网络

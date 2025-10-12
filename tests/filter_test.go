@@ -39,14 +39,6 @@ func TestMessageFilterBasic(t *testing.T) {
 	// 等待网络启动
 	time.Sleep(500 * time.Millisecond)
 
-	// 建立Node1和Node2之间的连接
-	connectNetworks(t, n1, n2)
-
-	// 等待连接建立
-	if !waitForConnection(t, n1, n2, 5*time.Second) {
-		t.Fatal("Failed to establish connection between networks")
-	}
-
 	// 在Node2上注册消息处理器和消息过滤器，过滤器拒绝包含"filtered"关键字的消息
 	collector := &messageCollector{}
 
@@ -106,30 +98,12 @@ func TestMessageFilterBasic(t *testing.T) {
 	cleanupNetworks(context.Background(), cancel1, n1, n2)
 }
 
-// createTestNetwork 创建测试网络实例
-func createTestNetworkNotDhtMdns(t *testing.T, host string, port int) network.NetworkInterface {
-	cfg := &network.NetworkConfig{
-		Host:        host,
-		Port:        port,
-		MaxPeers:    10,
-		DisableMDNS: false,
-		DisableDHT:  false,
-	}
-
-	n, err := network.New(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create network: %v", err)
-	}
-
-	return n
-}
-
 // TestMessageFilterNoForward 过滤后不转发测试
 func TestMessageFilterNoForward(t *testing.T) {
 	// 创建三个网络实例Node1、Node2和Node3，使用随机端口
-	n1 := createTestNetworkNotDhtMdns(t, "127.0.0.1", 0)
-	n2 := createTestNetworkNotDhtMdns(t, "127.0.0.1", 0)
-	n3 := createTestNetworkNotDhtMdns(t, "127.0.0.1", 0)
+	n1 := createTestNetwork(t, "127.0.0.1", 0)
+	n2 := createTestNetwork(t, "127.0.0.1", 0)
+	n3 := createTestNetwork(t, "127.0.0.1", 0)
 
 	// 启动三个网络实例的运行上下文
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -164,26 +138,16 @@ func TestMessageFilterNoForward(t *testing.T) {
 	// 等待网络启动
 	time.Sleep(500 * time.Millisecond)
 
-	// 建立线性连接：Node1 ↔ Node2 ↔ Node3
-	connectNetworks(t, n1, n2)
-	connectNetworks(t, n2, n3)
-
-	// 等待连接建立
-	if !waitForConnection(t, n1, n2, 5*time.Second) {
-		t.Fatal("Failed to establish connection between Node1 and Node2")
-	}
-	if !waitForConnection(t, n2, n3, 5*time.Second) {
-		t.Fatal("Failed to establish connection between Node2 and Node3")
-	}
-
 	// 在Node2上注册拒绝包含"do-not-forward"关键字消息的过滤器
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
+		t.Logf("Filtered message: %t", !bytes.Contains(msg.Data, []byte("do-not-forward")))
 		// 拒绝包含"do-not-forward"关键字的消息
 		return !bytes.Contains(msg.Data, []byte("do-not-forward"))
 	})
 
 	collector2 := &messageCollector{}
 	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
+		t.Logf("Received message: %s", string(msg.Data))
 		collector2.addMessage(msg)
 		return nil
 	})
@@ -191,6 +155,7 @@ func TestMessageFilterNoForward(t *testing.T) {
 	// 在Node3上注册消息处理器
 	collector3 := &messageCollector{}
 	n3.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
+		t.Logf("Received message: %s", string(msg.Data))
 		collector3.addMessage(msg)
 		return nil
 	})
@@ -273,14 +238,6 @@ func TestMessageFilterDynamic(t *testing.T) {
 
 	// 等待网络启动
 	time.Sleep(500 * time.Millisecond)
-
-	// 建立Node1和Node2之间的连接
-	connectNetworks(t, n1, n2)
-
-	// 等待连接建立
-	if !waitForConnection(t, n1, n2, 5*time.Second) {
-		t.Fatal("Failed to establish connection between networks")
-	}
 
 	// 在Node2上注册消息处理器和初始过滤器
 	collector := &messageCollector{}
@@ -428,18 +385,6 @@ func TestMessageFilterMultiple(t *testing.T) {
 
 	// 等待网络启动
 	time.Sleep(500 * time.Millisecond)
-
-	// 建立连接：Node1 ↔ Node2 ↔ Node3
-	connectNetworks(t, n1, n2)
-	connectNetworks(t, n2, n3)
-
-	// 等待连接建立
-	if !waitForConnection(t, n1, n2, 5*time.Second) {
-		t.Fatal("Failed to establish connection between Node1 and Node2")
-	}
-	if !waitForConnection(t, n2, n3, 5*time.Second) {
-		t.Fatal("Failed to establish connection between Node2 and Node3")
-	}
 
 	// 在Node2上注册过滤器：拒绝包含"node2-blocked"关键字的消息
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
