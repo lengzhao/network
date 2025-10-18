@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	// 创建网络配置
+	// Create network configuration
 	cfg := &network.NetworkConfig{
 		Host:           "127.0.0.1",
 		Port:           0,
@@ -23,40 +23,40 @@ func main() {
 		BootstrapPeers: []string{},
 	}
 
-	// 创建网络实例
+	// Create network instance
 	net, err := network.New(cfg)
 	if err != nil {
 		log.Fatalf("Failed to create network: %v", err)
 	}
 
-	// 注册聊天消息处理器
+	// Register chat message handler
 	net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
 		fmt.Printf("[%s] %s: %s\n", time.Now().Format("15:04:05"), from, string(msg.Data))
 		return nil
 	})
 
-	// 注册用户信息请求处理器
+	// Register user info request handler
 	net.RegisterRequestHandler("userinfo", func(from string, req network.Request) ([]byte, error) {
 		userInfo := fmt.Sprintf("User: %s", from)
 		fmt.Printf("[%s] Received userinfo request from %s\n", time.Now().Format("15:04:05"), from)
 		return []byte(userInfo), nil
 	})
 
-	// 打印本地节点地址
+	// Print local node addresses
 	fmt.Println("Local node addresses:")
 	for _, addr := range net.GetLocalAddresses() {
 		fmt.Printf("  %s\n", addr)
 	}
 
-	// 监听系统中断信号
+	// Listen for system interrupt signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// 启动网络
+	// Start network
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 在goroutine中运行网络
+	// Run network in goroutine
 	go func() {
 		if err := net.Run(ctx); err != nil {
 			log.Printf("Network stopped with error: %v", err)
@@ -65,7 +65,7 @@ func main() {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for network to start
 	time.Sleep(1 * time.Second)
 
 	fmt.Println("\nChat network is ready!")

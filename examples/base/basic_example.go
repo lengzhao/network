@@ -13,28 +13,28 @@ import (
 )
 
 func main() {
-	// 创建网络实例
+	// Create network instance
 	net, err := network.New(nil)
 	if err != nil {
 		log.Fatalf("Failed to create network: %v", err)
 	}
 
-	// 注册广播消息处理器
+	// Register broadcast message handler
 	net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
 		fmt.Printf("Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
 		return nil
 	})
 
-	// 注册点对点请求处理器
+	// Register point-to-point request handler
 	net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
 		fmt.Printf("Received request from %s: %s\n", from, string(req.Data))
-		// 回显请求数据作为响应
+		// Echo request data as response
 		return req.Data, nil
 	})
 
-	// 注册消息过滤器（可选）
+	// Register message filter (optional)
 	net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
-		// 过滤掉包含"spam"的消息
+		// Filter out messages containing "spam"
 		if string(msg.Data) == "spam" {
 			fmt.Println("Filtered out spam message")
 			return false
@@ -42,21 +42,21 @@ func main() {
 		return true
 	})
 
-	// 打印本地节点地址
+	// Print local node addresses
 	fmt.Println("Local node addresses:")
 	for _, addr := range net.GetLocalAddresses() {
 		fmt.Printf("  %s\n", addr)
 	}
 
-	// 启动网络
+	// Start network
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 监听系统中断信号
+	// Listen for system interrupt signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// 在goroutine中运行网络
+	// Run network in goroutine
 	go func() {
 		if err := net.Run(ctx); err != nil {
 			log.Printf("Network stopped with error: %v", err)
@@ -65,19 +65,19 @@ func main() {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for network to start
 	time.Sleep(1 * time.Second)
 
-	// 演示广播消息
+	// Demonstrate broadcast message
 	fmt.Println("\n--- Broadcasting message ---")
 	err = net.BroadcastMessage("chat", []byte("Hello, world!"))
 	if err != nil {
 		log.Printf("Failed to broadcast message: %v", err)
 	}
 
-	// 演示点对点请求（需要有其他节点连接才能工作）
+	// Demonstrate point-to-point request (requires other nodes to be connected to work)
 	fmt.Println("\n--- Sending request to self ---")
-	// 获取本地Peer ID并发送请求给自己
+	// Get local Peer ID and send request to self
 	localPeerID := net.GetLocalPeerID()
 	response, err := net.SendRequest(localPeerID, "echo", []byte("Hello, self!"))
 	if err != nil {
@@ -86,7 +86,7 @@ func main() {
 		fmt.Printf("Received response: %s\n", string(response))
 	}
 
-	// 等待用户中断或30秒后自动退出
+	// Wait for user interrupt or exit automatically after 30 seconds
 	fmt.Println("\nNetwork is running. Press Ctrl+C to stop.")
 	select {
 	case <-sigChan:
@@ -95,10 +95,10 @@ func main() {
 		fmt.Println("\nTimeout reached, shutting down...")
 	}
 
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel()
 
-	// 等待网络完全停止
+	// Wait for network to fully stop
 	time.Sleep(1 * time.Second)
 	fmt.Println("Example finished")
 }

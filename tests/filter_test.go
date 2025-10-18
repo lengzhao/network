@@ -9,19 +9,19 @@ import (
 	"github.com/lengzhao/network"
 )
 
-// TestMessageFilterBasic 基本消息过滤测试
+// TestMessageFilterBasic Basic message filtering test
 func TestMessageFilterBasic(t *testing.T) {
-	// 创建两个网络实例Node1和Node2，使用随机端口
+	// Create two network instances Node1 and Node2, using random ports
 	n1 := createTestNetwork(t, "127.0.0.1", 0)
 	n2 := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 启动两个网络实例的运行上下文
+	// Start the running context of both network instances
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel1()
 	defer cancel2()
 
-	// 在goroutine中运行两个网络
+	// Run both networks in goroutines
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -36,10 +36,10 @@ func TestMessageFilterBasic(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 在Node2上注册消息处理器和消息过滤器，过滤器拒绝包含"filtered"关键字的消息
+	// Register message handler and message filter on Node2, filter rejects messages containing "filtered" keyword
 	collector := &messageCollector{}
 
 	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
@@ -48,14 +48,14 @@ func TestMessageFilterBasic(t *testing.T) {
 	})
 
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
-		// 拒绝包含"filtered"关键字的消息
+		// Reject messages containing "filtered" keyword
 		return !bytes.Contains(msg.Data, []byte("filtered"))
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(1 * time.Second)
 
-	// 从Node1广播两条消息：一条包含"filtered"关键字，另一条不包含
+	// Broadcast two messages from Node1: one containing "filtered" keyword, the other not containing it
 	filteredMessage := []byte("this message should be filtered")
 	normalMessage := []byte("this message should be received")
 
@@ -69,17 +69,17 @@ func TestMessageFilterBasic(t *testing.T) {
 		t.Fatalf("Failed to broadcast normal message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证Node2只处理不包含"filtered"关键字的消息
+	// Verify Node2 only processes messages that do not contain "filtered" keyword
 	messages := collector.getMessages()
 
 	if len(messages) != 1 {
 		t.Errorf("Expected 1 message, got %d messages", len(messages))
 	}
 
-	// 验证Node2通过消息处理器接收到的消息数量正确
+	// Verify the number of messages Node2 receives through the message handler is correct
 	if len(messages) > 0 {
 		receivedMessage := messages[0]
 		if !bytes.Equal(receivedMessage.Data, normalMessage) {
@@ -87,25 +87,25 @@ func TestMessageFilterBasic(t *testing.T) {
 		}
 	}
 
-	// 验证被过滤的消息没有被处理
+	// Verify filtered messages are not processed
 	for _, msg := range messages {
 		if bytes.Contains(msg.Data, []byte("filtered")) {
 			t.Error("Filtered message was incorrectly processed")
 		}
 	}
 
-	// 清理资源
+	// Clean up resources
 	cleanupNetworks(context.Background(), cancel1, n1, n2)
 }
 
-// TestMessageFilterNoForward 过滤后不转发测试
+// TestMessageFilterNoForward Test that filtered messages are not forwarded
 func TestMessageFilterNoForward(t *testing.T) {
-	// 创建三个网络实例Node1、Node2和Node3，使用随机端口
+	// Create three network instances Node1, Node2 and Node3, using random ports
 	n1 := createTestNetwork(t, "127.0.0.1", 0)
 	n2 := createTestNetwork(t, "127.0.0.1", 0)
 	n3 := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 启动三个网络实例的运行上下文
+	// Start the running context of all three network instances
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	ctx3, cancel3 := context.WithCancel(context.Background())
@@ -113,7 +113,7 @@ func TestMessageFilterNoForward(t *testing.T) {
 	defer cancel2()
 	defer cancel3()
 
-	// 在goroutine中运行三个网络
+	// Run all three networks in goroutines
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -135,13 +135,13 @@ func TestMessageFilterNoForward(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 在Node2上注册拒绝包含"do-not-forward"关键字消息的过滤器
+	// Register filter on Node2 that rejects messages containing "do-not-forward" keyword
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
 		t.Logf("Filtered message: %t", !bytes.Contains(msg.Data, []byte("do-not-forward")))
-		// 拒绝包含"do-not-forward"关键字的消息
+		// Reject messages containing "do-not-forward" keyword
 		return !bytes.Contains(msg.Data, []byte("do-not-forward"))
 	})
 
@@ -152,7 +152,7 @@ func TestMessageFilterNoForward(t *testing.T) {
 		return nil
 	})
 
-	// 在Node3上注册消息处理器
+	// Register message handler on Node3
 	collector3 := &messageCollector{}
 	n3.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
 		t.Logf("Received message: %s", string(msg.Data))
@@ -160,17 +160,17 @@ func TestMessageFilterNoForward(t *testing.T) {
 		return nil
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(1 * time.Second)
 
-	// 从Node1广播包含"do-not-forward"关键字的消息
+	// Broadcast message containing "do-not-forward" keyword from Node1
 	filteredMessage := []byte("this message should not be forwarded: do-not-forward")
 	err := n1.BroadcastMessage("test-topic", filteredMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast filtered message: %v", err)
 	}
 
-	// 等待足够时间后验证Node3没有接收到该消息
+	// Wait long enough and verify Node3 does not receive the message
 	time.Sleep(2 * time.Second)
 
 	messages3 := collector3.getMessages()
@@ -178,14 +178,14 @@ func TestMessageFilterNoForward(t *testing.T) {
 		t.Error("Node3 received message that should have been filtered by Node2")
 	}
 
-	// 从Node1广播不包含"do-not-forward"关键字的消息
+	// Broadcast message that does not contain "do-not-forward" keyword from Node1
 	normalMessage := []byte("this message should be forwarded normally")
 	err = n1.BroadcastMessage("test-topic", normalMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast normal message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
 	messages2 := collector2.getMessages()
@@ -193,35 +193,36 @@ func TestMessageFilterNoForward(t *testing.T) {
 		t.Error("Node2 did not receive the normal message")
 	}
 
-	// 验证Node3成功接收到该消息
+	// Verify Node3 successfully receives the message
 	messages3 = collector3.getMessages()
 	if len(messages3) == 0 {
 		t.Error("Node3 did not receive the normal message")
 	}
 
+	// Verify Node3 receives the message that should have been forwarded by Node2
 	for _, msg := range messages3 {
 		if !bytes.Equal(msg.Data, normalMessage) {
 			t.Errorf("Node3 received incorrect message. Expected: %s, Got: %s", string(normalMessage), string(msg.Data))
 		}
 	}
 
-	// 清理资源
+	// Clean up resources
 	cleanupNetworks(context.Background(), cancel1, n1, n2, n3)
 }
 
-// TestMessageFilterDynamic 动态过滤规则测试
+// TestMessageFilterDynamic Test dynamic filter rules
 func TestMessageFilterDynamic(t *testing.T) {
-	// 创建两个网络实例Node1和Node2，使用随机端口
+	// Create two network instances Node1 and Node2, using random ports
 	n1 := createTestNetwork(t, "127.0.0.1", 0)
 	n2 := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 启动两个网络实例的运行上下文
+	// Start the running context of both network instances
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel1()
 	defer cancel2()
 
-	// 在goroutine中运行两个网络
+	// Run both networks in goroutines
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -236,10 +237,10 @@ func TestMessageFilterDynamic(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 在Node2上注册消息处理器和初始过滤器
+	// Register message handler and initial filter on Node2
 	collector := &messageCollector{}
 
 	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
@@ -247,32 +248,32 @@ func TestMessageFilterDynamic(t *testing.T) {
 		return nil
 	})
 
-	// 初始过滤器：拒绝包含"blocked"关键字的消息
+	// Initial filter: reject messages containing "blocked" keyword
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
 		return !bytes.Contains(msg.Data, []byte("blocked"))
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(1 * time.Second)
 
-	// 从Node1广播包含"blocked"关键字的消息
+	// Broadcast message containing "blocked" keyword from Node1
 	blockedMessage := []byte("this message is blocked")
 	err := n1.BroadcastMessage("test-topic", blockedMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast blocked message: %v", err)
 	}
 
-	// 从Node1广播正常消息
+	// Broadcast normal message from Node1
 	normalMessage := []byte("this is a normal message")
 	err = n1.BroadcastMessage("test-topic", normalMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast normal message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证初始过滤器生效：只接收到正常消息
+	// Verify initial filter is effective: only normal message is received
 	messages := collector.getMessages()
 	if len(messages) != 1 {
 		t.Errorf("Expected 1 message with initial filter, got %d messages", len(messages))
@@ -282,35 +283,35 @@ func TestMessageFilterDynamic(t *testing.T) {
 		t.Errorf("Received incorrect message. Expected: %s, Got: %s", string(normalMessage), string(messages[0].Data))
 	}
 
-	// 清空消息收集器
+	// Clear message collector
 	collector.clear()
 
-	// 更新过滤器：现在拒绝包含"forbidden"关键字的消息
+	// Update filter: now reject messages containing "forbidden" keyword
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
 		return !bytes.Contains(msg.Data, []byte("forbidden"))
 	})
 
-	// 等待过滤器更新生效
+	// Wait for filter update to take effect
 	time.Sleep(500 * time.Millisecond)
 
-	// 从Node1广播包含"forbidden"关键字的消息
+	// Broadcast message containing "forbidden" keyword from Node1
 	forbiddenMessage := []byte("this message is forbidden")
 	err = n1.BroadcastMessage("test-topic", forbiddenMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast forbidden message: %v", err)
 	}
 
-	// 从Node1广播正常消息
+	// Broadcast normal message from Node1
 	anotherNormalMessage := []byte("another normal message")
 	err = n1.BroadcastMessage("test-topic", anotherNormalMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast another normal message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证更新后的过滤器生效：只接收到正常消息
+	// Verify updated filter is effective: only normal message is received
 	messages = collector.getMessages()
 	if len(messages) != 1 {
 		t.Errorf("Expected 1 message with updated filter, got %d messages", len(messages))
@@ -320,19 +321,19 @@ func TestMessageFilterDynamic(t *testing.T) {
 		t.Errorf("Received incorrect message. Expected: %s, Got: %s", string(anotherNormalMessage), string(messages[0].Data))
 	}
 
-	// 验证之前被允许的消息现在被拒绝（blocked消息应该能通过新的过滤器）
+	// Verify previously allowed message is now rejected (blocked message should pass through new filter)
 	collector.clear()
 
-	// 重新发送之前被blocked的消息
+	// Resend previously blocked message
 	err = n1.BroadcastMessage("test-topic", blockedMessage)
 	if err != nil {
 		t.Fatalf("Failed to rebroadcast blocked message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证blocked消息现在能通过新的过滤器
+	// Verify blocked message now passes through new filter
 	messages = collector.getMessages()
 	if len(messages) != 1 {
 		t.Errorf("Expected 1 message (previously blocked) with updated filter, got %d messages", len(messages))
@@ -342,18 +343,18 @@ func TestMessageFilterDynamic(t *testing.T) {
 		t.Errorf("Received incorrect message. Expected: %s, Got: %s", string(blockedMessage), string(messages[0].Data))
 	}
 
-	// 清理资源
+	// Clean up resources
 	cleanupNetworks(context.Background(), cancel1, n1, n2)
 }
 
-// TestMessageFilterMultiple 多过滤器协同测试
+// TestMessageFilterMultiple Test multiple filters working together
 func TestMessageFilterMultiple(t *testing.T) {
-	// 创建三个网络实例Node1、Node2和Node3，使用随机端口
+	// Create three network instances Node1, Node2 and Node3, using random ports
 	n1 := createTestNetwork(t, "127.0.0.1", 0)
 	n2 := createTestNetwork(t, "127.0.0.1", 0)
 	n3 := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 启动三个网络实例的运行上下文
+	// Start the running context of all three network instances
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	ctx3, cancel3 := context.WithCancel(context.Background())
@@ -361,7 +362,7 @@ func TestMessageFilterMultiple(t *testing.T) {
 	defer cancel2()
 	defer cancel3()
 
-	// 在goroutine中运行三个网络
+	// Run all three networks in goroutines
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -383,20 +384,20 @@ func TestMessageFilterMultiple(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 在Node2上注册过滤器：拒绝包含"node2-blocked"关键字的消息
+	// Register filter on Node2: reject messages containing "node2-blocked" keyword
 	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
 		return !bytes.Contains(msg.Data, []byte("node2-blocked"))
 	})
 
-	// 在Node3上注册过滤器：拒绝包含"node3-blocked"关键字的消息
+	// Register filter on Node3: reject messages containing "node3-blocked" keyword
 	n3.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
 		return !bytes.Contains(msg.Data, []byte("node3-blocked"))
 	})
 
-	// 在Node2和Node3上注册消息处理器
+	// Register message handler on Node2 and Node3
 	collector2 := &messageCollector{}
 	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
 		collector2.addMessage(msg)
@@ -409,64 +410,64 @@ func TestMessageFilterMultiple(t *testing.T) {
 		return nil
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(1 * time.Second)
 
-	// 从Node1广播三种不同类型的消息
+	// Broadcast three types of messages from Node1
 	node2BlockedMessage := []byte("message blocked by node2: node2-blocked")
 	node3BlockedMessage := []byte("message blocked by node3: node3-blocked")
 	normalMessage := []byte("normal message that should reach both nodes")
 
-	// 广播被Node2过滤的消息
+	// Broadcast message blocked by Node2
 	err := n1.BroadcastMessage("test-topic", node2BlockedMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast node2-blocked message: %v", err)
 	}
 
-	// 广播被Node3过滤的消息
+	// Broadcast message blocked by Node3
 	err = n1.BroadcastMessage("test-topic", node3BlockedMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast node3-blocked message: %v", err)
 	}
 
-	// 广播正常消息
+	// Broadcast normal message
 	err = n1.BroadcastMessage("test-topic", normalMessage)
 	if err != nil {
 		t.Fatalf("Failed to broadcast normal message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证Node2只接收到正常消息和被Node3过滤的消息（Node2会转发被Node3过滤的消息）
+	// Verify Node2 only receives normal message and message blocked by Node3 (Node2 will forward message blocked by Node3)
 	messages2 := collector2.getMessages()
-	expectedMessages2 := 2 // 正常消息 + 被Node3过滤的消息
+	expectedMessages2 := 2 // normal message + message blocked by Node3
 	if len(messages2) != expectedMessages2 {
 		t.Errorf("Node2 expected %d messages, got %d messages", expectedMessages2, len(messages2))
 	}
 
-	// 验证Node3只接收到正常消息和被Node2过滤的消息（Node3会接收到被Node2过滤的消息）
+	// Verify Node3 only receives normal message and message blocked by Node2 (Node3 will receive message blocked by Node2)
 	messages3 := collector3.getMessages()
-	expectedMessages3 := 2 // 正常消息 + 被Node2过滤的消息
+	expectedMessages3 := 2 // normal message + message blocked by Node2
 	if len(messages3) != expectedMessages3 {
 		t.Errorf("Node3 expected %d messages, got %d messages", expectedMessages3, len(messages3))
 	}
 
-	// 验证Node2没有接收到被自己过滤的消息
+	// Verify Node2 does not receive message filtered by its own filter
 	for _, msg := range messages2 {
 		if bytes.Contains(msg.Data, []byte("node2-blocked")) {
 			t.Error("Node2 received message that should have been filtered by its own filter")
 		}
 	}
 
-	// 验证Node3没有接收到被自己过滤的消息
+	// Verify Node3 does not receive message filtered by its own filter
 	for _, msg := range messages3 {
 		if bytes.Contains(msg.Data, []byte("node3-blocked")) {
 			t.Error("Node3 received message that should have been filtered by its own filter")
 		}
 	}
 
-	// 验证两个节点都接收到正常消息
+	// Verify both nodes receive normal message
 	foundNormalInNode2 := false
 	foundNormalInNode3 := false
 
@@ -492,6 +493,6 @@ func TestMessageFilterMultiple(t *testing.T) {
 		t.Error("Node3 did not receive the normal message")
 	}
 
-	// 清理资源
+	// Clean up resources
 	cleanupNetworks(context.Background(), cancel1, n1, n2, n3)
 }

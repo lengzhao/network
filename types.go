@@ -5,22 +5,22 @@ import (
 	"fmt"
 )
 
-// NetMessage 广播模式下的消息结构
+// NetMessage Message structure in broadcast mode
 type NetMessage struct {
-	From  string // 消息发送方的Peer ID
-	Topic string // 消息所属主题
-	Data  []byte // 消息数据
+	From  string // Peer ID of the message sender
+	Topic string // Topic to which the message belongs
+	Data  []byte // Message data
 }
 
-// Request 点对点请求结构
+// Request Point-to-point request structure
 type Request struct {
-	Type string // 请求类型
-	Data []byte // 请求数据
+	Type string // Request type
+	Data []byte // Request data
 }
 
-// Serialize 序列化请求
+// Serialize Serialize request
 func (r *Request) Serialize() ([]byte, error) {
-	// 简单的序列化实现，实际项目中可以使用更复杂的序列化方式如protobuf
+	// Simple serialization implementation, in actual projects more complex serialization methods such as protobuf can be used
 	data := make([]byte, 0)
 	data = append(data, byte(len(r.Type)))
 	data = append(data, []byte(r.Type)...)
@@ -28,7 +28,7 @@ func (r *Request) Serialize() ([]byte, error) {
 	return data, nil
 }
 
-// Deserialize 反序列化请求
+// Deserialize Deserialize request
 func (r *Request) Deserialize(data []byte) error {
 	if len(data) == 0 {
 		return fmt.Errorf("empty data")
@@ -42,15 +42,15 @@ func (r *Request) Deserialize(data []byte) error {
 	return nil
 }
 
-// Response 点对点响应结构
+// Response Point-to-point response structure
 type Response struct {
-	Type string // 响应类型
-	Data []byte // 响应数据
+	Type string // Response type
+	Data []byte // Response data
 }
 
-// Serialize 序列化响应
+// Serialize Serialize response
 func (r *Response) Serialize() ([]byte, error) {
-	// 简单的序列化实现，实际项目中可以使用更复杂的序列化方式如protobuf
+	// Simple serialization implementation, in actual projects more complex serialization methods such as protobuf can be used
 	data := make([]byte, 0)
 	data = append(data, byte(len(r.Type)))
 	data = append(data, []byte(r.Type)...)
@@ -58,7 +58,7 @@ func (r *Response) Serialize() ([]byte, error) {
 	return data, nil
 }
 
-// Deserialize 反序列化响应
+// Deserialize Deserialize response
 func (r *Response) Deserialize(data []byte) error {
 	if len(data) == 0 {
 		return fmt.Errorf("empty data")
@@ -72,44 +72,44 @@ func (r *Response) Deserialize(data []byte) error {
 	return nil
 }
 
-// MessageHandler 用于处理广播模式下接收到的消息
+// MessageHandler Used to handle messages received in broadcast mode
 type MessageHandler func(from string, msg NetMessage) error
 
-// RequestHandler 用于处理点对点模式下的请求
+// RequestHandler Used to handle requests in point-to-point mode
 type RequestHandler func(from string, req Request) ([]byte, error)
 
-// MessageFilter 用于过滤广播消息
+// MessageFilter Used to filter broadcast messages
 type MessageFilter func(msg NetMessage) bool
 
-// NetworkInterface 网络接口，定义了所有对外提供的功能
+// NetworkInterface Network interface, defines all externally provided functions
 type NetworkInterface interface {
-	// Run 启动网络模块并运行
+	// Run Start the network module and run
 	Run(ctx context.Context) error
 
-	// BroadcastMessage 广播消息到指定主题
+	// BroadcastMessage Broadcast message to specified topic
 	BroadcastMessage(topic string, data []byte) error
 
-	// RegisterMessageHandler 注册广播消息处理器
+	// RegisterMessageHandler Register broadcast message handler
 	RegisterMessageHandler(topic string, handler MessageHandler)
 
-	// RegisterRequestHandler 注册点对点请求处理器
+	// RegisterRequestHandler Register point-to-point request handler
 	RegisterRequestHandler(requestType string, handler RequestHandler)
 
-	// SendRequest 发送点对点请求
+	// SendRequest Send point-to-point request
 	SendRequest(peerID string, requestType string, data []byte) ([]byte, error)
 
-	// ConnectToPeer 连接到指定节点
+	// ConnectToPeer Connect to specified peer
 	ConnectToPeer(addr string) error
 
-	// GetPeers 获取连接的节点列表
+	// GetPeers Get list of connected peers
 	GetPeers() []string
 
-	// GetLocalAddresses 获取本地节点的地址列表
+	// GetLocalAddresses Get local peer address list
 	GetLocalAddresses() []string
 
-	// GetLocalPeerID 获取本地节点的Peer ID
+	// GetLocalPeerID Get local peer ID
 	GetLocalPeerID() string
 
-	// RegisterMessageFilter 注册广播消息过滤器
+	// RegisterMessageFilter Register broadcast message filter
 	RegisterMessageFilter(topic string, filter MessageFilter)
 }

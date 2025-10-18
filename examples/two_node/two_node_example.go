@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	// 创建第一个节点
+	// Create first node
 	cfg1 := &network.NetworkConfig{
 		Host:           "127.0.0.1",
 		Port:           8001,
@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("Failed to create node 1: %v", err)
 	}
 
-	// 创建第二个节点
+	// Create second node
 	cfg2 := &network.NetworkConfig{
 		Host:           "127.0.0.1",
 		Port:           8002,
@@ -41,13 +41,13 @@ func main() {
 		log.Fatalf("Failed to create node 2: %v", err)
 	}
 
-	// 为节点1注册处理器
+	// Register handlers for node 1
 	net1.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
 		fmt.Printf("[Node 1] Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
 		return nil
 	})
 
-	// 节点1需要处理来自节点2的echo和query请求
+	// Node 1 needs to handle echo and query requests from node 2
 	net1.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
 		fmt.Printf("[Node 1] Received echo request from %s: %s\n", from, string(req.Data))
 		return append([]byte("Echo: "), req.Data...), nil
@@ -58,13 +58,13 @@ func main() {
 		return []byte("Current time: " + time.Now().Format(time.RFC3339)), nil
 	})
 
-	// 为节点2注册处理器
+	// Register handlers for node 2
 	net2.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
 		fmt.Printf("[Node 2] Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
 		return nil
 	})
 
-	// 节点2需要处理来自节点1的echo和query请求
+	// Node 2 needs to handle echo and query requests from node 1
 	net2.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
 		fmt.Printf("[Node 2] Received echo request from %s: %s\n", from, string(req.Data))
 		return append([]byte("Echo: "), req.Data...), nil
@@ -75,14 +75,14 @@ func main() {
 		return []byte("Current time: " + time.Now().Format(time.RFC3339)), nil
 	})
 
-	// 启动两个节点
+	// Start both nodes
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// 启动节点1
+	// Start node 1
 	go func() {
 		fmt.Println("[Node 1] Starting...")
 		if err := net1.Run(ctx); err != nil {
@@ -92,7 +92,7 @@ func main() {
 		}
 	}()
 
-	// 启动节点2
+	// Start node 2
 	go func() {
 		fmt.Println("[Node 2] Starting...")
 		if err := net2.Run(ctx); err != nil {
@@ -102,10 +102,10 @@ func main() {
 		}
 	}()
 
-	// 等待节点启动和处理器注册完成
+	// Wait for nodes to start and handler registration to complete
 	time.Sleep(2 * time.Second)
 
-	// 打印节点地址
+	// Print node addresses
 	fmt.Println("\n[Node 1] Addresses:")
 	for _, addr := range net1.GetLocalAddresses() {
 		fmt.Printf("  %s\n", addr)
@@ -116,9 +116,9 @@ func main() {
 		fmt.Printf("  %s\n", addr)
 	}
 
-	// 连接两个节点
+	// Connect two nodes
 	fmt.Println("\n--- Connecting nodes ---")
-	// 使用节点2的第一个地址连接到节点1
+	// Use node 2's first address to connect to node 1
 	if len(net2.GetLocalAddresses()) > 0 {
 		addr2 := net2.GetLocalAddresses()[0]
 		fmt.Printf("Connecting Node 1 to Node 2 at address: %s\n", addr2)
@@ -130,18 +130,18 @@ func main() {
 		}
 	}
 
-	// 等待连接建立和订阅完成
+	// Wait for connections and subscriptions to establish
 	fmt.Println("Waiting for connections and subscriptions to establish...")
 	time.Sleep(3 * time.Second)
 
-	// 检查连接状态
+	// Check connection status
 	fmt.Println("\n--- Connection status ---")
 	peers1 := net1.GetPeers()
 	peers2 := net2.GetPeers()
 	fmt.Printf("[Node 1] Connected peers: %v\n", peers1)
 	fmt.Printf("[Node 2] Connected peers: %v\n", peers2)
 
-	// 演示广播消息
+	// Demonstrate broadcast message
 	fmt.Println("\n--- Broadcasting message ---")
 	err = net1.BroadcastMessage("chat", []byte("Hello from Node 1!"))
 	if err != nil {
@@ -157,16 +157,16 @@ func main() {
 		fmt.Println("Node 2 broadcast message: 'Hello from Node 2!'")
 	}
 
-	// 等待广播消息处理
+	// Wait for broadcast messages to be processed
 	fmt.Println("Waiting for broadcast messages to be processed...")
 	time.Sleep(2 * time.Second)
 
-	// 演示点对点请求
+	// Demonstrate P2P requests
 	fmt.Println("\n--- Sending P2P requests ---")
-	// 节点1向节点2发送echo请求
+	// Node 1 sends echo request to node 2
 	node2PeerID := net2.GetLocalPeerID()
 	fmt.Printf("Node 1 sending echo request to Node 2 (Peer ID: %s)\n", node2PeerID)
-	time.Sleep(1 * time.Second) // 确保处理器注册完成
+	time.Sleep(1 * time.Second) // Ensure handler registration is complete
 	response, err := net1.SendRequest(node2PeerID, "echo", []byte("Hello Node 2!"))
 	if err != nil {
 		log.Printf("Node 1 failed to send echo request to Node 2: %v", err)
@@ -174,10 +174,10 @@ func main() {
 		fmt.Printf("[Node 1] Received echo response from Node 2: %s\n", string(response))
 	}
 
-	// 节点2向节点1发送query请求
+	// Node 2 sends query request to node 1
 	node1PeerID := net1.GetLocalPeerID()
 	fmt.Printf("Node 2 sending query request to Node 1 (Peer ID: %s)\n", node1PeerID)
-	time.Sleep(1 * time.Second) // 确保处理器注册完成
+	time.Sleep(1 * time.Second) // Ensure handler registration is complete
 	response, err = net2.SendRequest(node1PeerID, "query", []byte("What time is it?"))
 	if err != nil {
 		log.Printf("Node 2 failed to send query request to Node 1: %v", err)
@@ -185,7 +185,7 @@ func main() {
 		fmt.Printf("[Node 2] Received query response from Node 1: %s\n", string(response))
 	}
 
-	// 等待用户中断或30秒后自动退出
+	// Wait for user interrupt or exit automatically after 30 seconds
 	fmt.Println("\nNetwork is running. Press Ctrl+C to stop.")
 	select {
 	case <-sigChan:
@@ -194,10 +194,10 @@ func main() {
 		fmt.Println("\nTimeout reached, shutting down...")
 	}
 
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel()
 
-	// 等待网络完全停止
+	// Wait for network to fully stop
 	time.Sleep(1 * time.Second)
 	fmt.Println("Example finished")
 }

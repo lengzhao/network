@@ -9,19 +9,19 @@ import (
 	"github.com/lengzhao/network"
 )
 
-// TestBroadcastFunctionality 测试广播功能
+// TestBroadcastFunctionality Test broadcast functionality
 func TestBroadcastFunctionality(t *testing.T) {
-	// 创建两个网络实例Node1和Node2，使用随机端口
+	// Create two network instances Node1 and Node2, using random ports
 	n1 := createTestNetwork(t, "127.0.0.1", 0)
 	n2 := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 启动两个网络实例的运行上下文
+	// Start the running context of both network instances
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel1()
 	defer cancel2()
 
-	// 在goroutine中运行两个网络
+	// Run both networks in goroutines
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -36,25 +36,25 @@ func TestBroadcastFunctionality(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 获取Node2的地址并连接
+	// Get Node2's address and connect
 	addrs := n2.GetLocalAddresses()
 	if len(addrs) == 0 {
 		t.Fatal("Network 2 has no addresses")
 	}
 
-	// 连接网络1到网络2
+	// Connect network 1 to network 2
 	err := n1.ConnectToPeer(addrs[0])
 	if err != nil {
 		t.Fatalf("Failed to connect networks: %v", err)
 	}
 
-	// 等待连接建立
+	// Wait for connection to establish
 	time.Sleep(500 * time.Millisecond)
 
-	// 验证连接状态
+	// Verify connection status
 	peers1 := n1.GetPeers()
 	peers2 := n2.GetPeers()
 
@@ -66,10 +66,10 @@ func TestBroadcastFunctionality(t *testing.T) {
 		t.Error("Network 2 has no peers")
 	}
 
-	// 用于接收消息的通道
+	// Channel for receiving messages
 	receivedMessages := make(chan network.NetMessage, 10)
 
-	// 注册消息处理器
+	// Register message handlers
 	n1.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
 		receivedMessages <- msg
 		return nil
@@ -80,21 +80,21 @@ func TestBroadcastFunctionality(t *testing.T) {
 		return nil
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(1 * time.Second)
 
-	// 从网络1广播消息
+	// Broadcast message from network 1
 	messageData := []byte("broadcast message")
 	err = n1.BroadcastMessage("test-topic", messageData)
 	if err != nil {
 		t.Fatalf("Failed to broadcast message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证两个节点都通过messageCollector接收到消息
-	// 注意：发送方不会收到自己发送的消息，所以只期望收到1条消息（来自n2）
+	// Verify both nodes receive messages through messageCollector
+	// Note: Sender will not receive their own message, so only expect 1 message (from n2)
 	messages := make([]network.NetMessage, 0)
 
 	close(receivedMessages)
@@ -102,40 +102,40 @@ func TestBroadcastFunctionality(t *testing.T) {
 		messages = append(messages, msg)
 	}
 
-	// 修复：期望至少1条消息，而不是2条
-	// 因为发送方（n1）不会收到自己发送的消息，只有接收方（n2）会收到消息
+	// Fix: Expect at least 1 message, not 2
+	// Because sender (n1) will not receive their own message, only receiver (n2) will receive the message
 	if len(messages) < 1 {
 		t.Errorf("Expected at least 1 message, got %d messages", len(messages))
 	}
 
-	// 验证所有节点接收到的消息内容与发送的内容一致
+	// Verify all nodes receive message content consistent with sent content
 	for _, msg := range messages {
 		if !bytes.Equal(msg.Data, messageData) {
 			t.Errorf("Node received incorrect message data. Expected: %s, Got: %s", string(messageData), string(msg.Data))
 		}
 	}
 
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel1()
 	cancel2()
 
-	// 等待网络关闭
+	// Wait for network to shut down
 	time.Sleep(500 * time.Millisecond)
 }
 
-// TestBroadcastMultipleTopics 测试多个主题的广播功能
+// TestBroadcastMultipleTopics Test broadcast functionality for multiple topics
 func TestBroadcastMultipleTopics(t *testing.T) {
-	// 创建两个网络实例Node1和Node2，使用随机端口
+	// Create two network instances Node1 and Node2, using random ports
 	n1 := createTestNetwork(t, "127.0.0.1", 0)
 	n2 := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 启动两个网络实例的运行上下文
+	// Start the running context of both network instances
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel1()
 	defer cancel2()
 
-	// 在goroutine中运行两个网络
+	// Run both networks in goroutines
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -150,25 +150,25 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 获取Node2的地址并连接
+	// Get Node2's address and connect
 	addrs := n2.GetLocalAddresses()
 	if len(addrs) == 0 {
 		t.Fatal("Network 2 has no addresses")
 	}
 
-	// 连接网络1到网络2
+	// Connect network 1 to network 2
 	err := n1.ConnectToPeer(addrs[0])
 	if err != nil {
 		t.Fatalf("Failed to connect networks: %v", err)
 	}
 
-	// 等待连接建立
+	// Wait for connection to establish
 	time.Sleep(500 * time.Millisecond)
 
-	// 验证连接状态
+	// Verify connection status
 	peers1 := n1.GetPeers()
 	peers2 := n2.GetPeers()
 
@@ -180,11 +180,11 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 		t.Error("Network 2 has no peers")
 	}
 
-	// 用于接收消息的通道
+	// Channel for receiving messages
 	receivedMessagesTopic1 := make(chan network.NetMessage, 10)
 	receivedMessagesTopic2 := make(chan network.NetMessage, 10)
 
-	// 注册消息处理器
+	// Register message handlers
 	n1.RegisterMessageHandler("topic1", func(from string, msg network.NetMessage) error {
 		receivedMessagesTopic1 <- msg
 		return nil
@@ -205,27 +205,27 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 		return nil
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(1 * time.Second)
 
-	// 从网络1广播消息到"topic1"主题
+	// Broadcast message from network 1 to "topic1" topic
 	messageDataTopic1 := []byte("broadcast message to topic1")
 	err = n1.BroadcastMessage("topic1", messageDataTopic1)
 	if err != nil {
 		t.Fatalf("Failed to broadcast message to topic1: %v", err)
 	}
 
-	// 从网络1广播消息到"topic2"主题
+	// Broadcast message from network 1 to "topic2" topic
 	messageDataTopic2 := []byte("broadcast message to topic2")
 	err = n1.BroadcastMessage("topic2", messageDataTopic2)
 	if err != nil {
 		t.Fatalf("Failed to broadcast message to topic2: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(2 * time.Second)
 
-	// 验证Node2都通过messageCollector接收到消息
+	// Verify Node2 receives messages through messageCollector
 	messagesTopic1 := make([]network.NetMessage, 0)
 	messagesTopic2 := make([]network.NetMessage, 0)
 
@@ -248,7 +248,7 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 		t.Error("Node2 did not receive the broadcast message for topic2")
 	}
 
-	// 验证所有节点接收到的消息内容与发送的内容一致
+	// Verify all nodes receive message content consistent with sent content
 	for _, msg := range messagesTopic1 {
 		if !bytes.Equal(msg.Data, messageDataTopic1) {
 			t.Errorf("Node2 received incorrect message data for topic1. Expected: %s, Got: %s", string(messageDataTopic1), string(msg.Data))
@@ -261,10 +261,10 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 		}
 	}
 
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel1()
 	cancel2()
 
-	// 等待网络关闭
+	// Wait for network to shut down
 	time.Sleep(500 * time.Millisecond)
 }

@@ -1,36 +1,34 @@
 package network
 
-// NetworkConfig 网络配置
+// NetworkConfig network configuration
 type NetworkConfig struct {
-	Host           string   // 监听地址
-	Port           int      // 监听端口
-	MaxPeers       int      // 最大连接数
-	PrivateKeyPath string   // 私钥文件路径
-	BootstrapPeers []string // Bootstrap节点地址列表
-	PeerWhitelist  []string // 节点白名单(节点ID字符串列表)
-	DisableMDNS    bool     // 是否禁用MDNS发现功能
+	Host           string   // Listening address
+	Port           int      // Listening port
+	MaxPeers       int      // Maximum number of connections
+	PrivateKeyPath string   // Private key file path
+	BootstrapPeers []string // Bootstrap node address list
 
-	// 新增的配置字段
-	EnablePeerScoring  bool    // 是否启用Peer评分
-	MaxIPColocation    int     // 单个IP地址最大节点数
-	IPColocationWeight float64 // IP共置权重
-	BehaviourWeight    float64 // 行为权重
-	BehaviourDecay     float64 // 行为衰减因子
-	AppSpecificScore   float64 // 应用特定评分
+	// Newly added configuration fields
+	EnablePeerScoring  bool    // Whether to enable Peer scoring
+	MaxIPColocation    int     // Maximum number of nodes per IP address
+	IPColocationWeight float64 // IP colocation weight
+	BehaviourWeight    float64 // Behavior weight
+	BehaviourDecay     float64 // Behavior decay factor
+	AppSpecificScore   float64 // Application specific score
 }
 
-// NewNetworkConfig 创建一个新的网络配置实例，使用默认值
+// NewNetworkConfig creates a new network configuration instance with default values
 func NewNetworkConfig() *NetworkConfig {
 	return &NetworkConfig{
 		Host:     "0.0.0.0",
 		Port:     0,
 		MaxPeers: 100,
 
-		// 默认启用Peer评分
+		// Peer scoring enabled by default
 		EnablePeerScoring:  true,
-		MaxIPColocation:    3,    // 单个IP地址最多3个节点
-		IPColocationWeight: -0.1, // IP共置权重
-		BehaviourWeight:    -1.0, // 行为权重
-		BehaviourDecay:     0.98, // 行为衰减因子
+		MaxIPColocation:    3,    // Maximum 3 nodes per IP address
+		IPColocationWeight: -0.1, // IP colocation weight
+		BehaviourWeight:    -1.0, // Behavior weight
+		BehaviourDecay:     0.98, // Behavior decay factor
 	}
 }

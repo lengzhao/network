@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// 添加测试辅助函数和结构体
+// Add test helper functions and structures
 
-// messageCollector 用于收集广播消息
+// messageCollector Used to collect broadcast messages
 type messageCollector struct {
 	messages []NetMessage
 	mu       sync.Mutex
@@ -26,17 +26,17 @@ func (mc *messageCollector) addMessage(msg NetMessage) {
 func (mc *messageCollector) getMessages() []NetMessage {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	// 返回副本以避免数据竞争
+	// Return a copy to avoid data race
 	result := make([]NetMessage, len(mc.messages))
 	copy(result, mc.messages)
 	return result
 }
 
-// createTestNetwork 创建测试网络实例
+// createTestNetwork Create test network instance
 func createTestNetwork(t *testing.T, host string, port int) NetworkInterface {
 	cfg := &NetworkConfig{
 		Host:     host,
-		Port:     port, // 使用指定端口或0表示随机端口
+		Port:     port, // Use specified port or 0 for random port
 		MaxPeers: 10,
 	}
 
@@ -48,7 +48,7 @@ func createTestNetwork(t *testing.T, host string, port int) NetworkInterface {
 	return n
 }
 
-// connectNetworks 建立两个网络间的连接
+// connectNetworks Establish connection between two networks
 func connectNetworks(t *testing.T, n1, n2 NetworkInterface) {
 	addrs := n2.GetLocalAddresses()
 	if len(addrs) == 0 {
@@ -61,7 +61,7 @@ func connectNetworks(t *testing.T, n1, n2 NetworkInterface) {
 	}
 }
 
-// waitForConnection 等待连接建立
+// waitForConnection Wait for connection to establish
 func waitForConnection(_ *testing.T, n1, n2 NetworkInterface, timeout time.Duration) bool {
 	timeoutChan := time.After(timeout)
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -82,39 +82,39 @@ func waitForConnection(_ *testing.T, n1, n2 NetworkInterface, timeout time.Durat
 	}
 }
 
-// cleanupNetworks 清理网络资源
+// cleanupNetworks Clean up network resources
 func cleanupNetworks(_ context.Context, cancel context.CancelFunc, _ ...NetworkInterface) {
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel()
 
-	// 等待网络关闭
+	// Wait for network to shut down
 	time.Sleep(500 * time.Millisecond)
 }
 
 func TestMessageHandlerRegistration(t *testing.T) {
 	n := createTestNetwork(t, "127.0.0.1", 0)
 
-	// 创建消息处理器
+	// Create message handler
 	handler := func(from string, msg NetMessage) error {
 		return nil
 	}
 
-	// 注册消息处理器
+	// Register message handler
 	n.RegisterMessageHandler("test-topic", handler)
 
-	// 验证消息是否被处理
+	// Verify message is processed
 	_ = handler
 }
 
 func TestNetworkCreation(t *testing.T) {
-	// 创建网络配置
+	// Create network configuration
 	cfg := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
-	// 创建网络实例
+	// Create network instance
 	n, err := New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create network: %v", err)
@@ -124,77 +124,77 @@ func TestNetworkCreation(t *testing.T) {
 		t.Fatal("Network instance is nil")
 	}
 
-	// 网络实例创建成功，类型正确
+	// Network instance created successfully, type is correct
 	_ = n
 }
 
 func TestRequestHandlerRegistration(t *testing.T) {
-	// 创建网络配置
+	// Create network configuration
 	cfg := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
-	// 创建网络实例
+	// Create network instance
 	n, err := New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create network: %v", err)
 	}
 
-	// 注册请求处理器
+	// Register request handler
 	handler := func(from string, req Request) ([]byte, error) {
 		return []byte("response"), nil
 	}
 
 	n.RegisterRequestHandler("test-request", handler)
 
-	// 处理器注册成功，没有panic
+	// Handler registered successfully, no panic
 }
 
 func TestMessageFilterRegistration(t *testing.T) {
-	// 创建网络配置
+	// Create network configuration
 	cfg := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
-	// 创建网络实例
+	// Create network instance
 	n, err := New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create network: %v", err)
 	}
 
-	// 注册消息过滤器
+	// Register message filter
 	filter := func(msg NetMessage) bool {
-		return true // 接受所有消息
+		return true // Accept all messages
 	}
 
 	n.RegisterMessageFilter("test-topic", filter)
 
-	// 过滤器注册成功，没有panic
+	// Filter registered successfully, no panic
 }
 
 func TestNetworkRunAndCancel(t *testing.T) {
-	// 创建网络配置
+	// Create network configuration
 	cfg := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
-	// 创建网络实例
+	// Create network instance
 	n, err := New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create network: %v", err)
 	}
 
-	// 创建一个带超时的上下文
+	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// 在goroutine中运行网络
+	// Run network in goroutine
 	go func() {
 		err := n.Run(ctx)
 		if err != nil && err != context.DeadlineExceeded && err != context.Canceled {
@@ -202,32 +202,32 @@ func TestNetworkRunAndCancel(t *testing.T) {
 		}
 	}()
 
-	// 等待一段时间确保网络启动
+	// Wait for a while to ensure network starts
 	time.Sleep(500 * time.Millisecond)
 
-	// 取消上下文
+	// Cancel context
 	cancel()
 
-	// 等待网络关闭
+	// Wait for network to shut down
 	time.Sleep(500 * time.Millisecond)
 }
 
-// 添加点对点发送测试用例
+// Add point-to-point send test case
 func TestPointToPointSend(t *testing.T) {
-	// 创建两个网络实例用于测试
+	// Create two network instances for testing
 	cfg1 := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
 	cfg2 := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
-	// 创建两个网络实例
+	// Create two network instances
 	n1, err := New(cfg1)
 	if err != nil {
 		t.Fatalf("Failed to create network 1: %v", err)
@@ -238,13 +238,13 @@ func TestPointToPointSend(t *testing.T) {
 		t.Fatalf("Failed to create network 2: %v", err)
 	}
 
-	// 创建带超时的上下文
+	// Create context with timeout
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel1()
 	defer cancel2()
 
-	// 在goroutine中运行两个网络
+	// Run two networks in goroutine
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -259,10 +259,10 @@ func TestPointToPointSend(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 获取网络2的地址并连接
+	// Get network 2 address and connect
 	addrs := n2.GetLocalAddresses()
 	if len(addrs) == 0 {
 		t.Fatal("Network 2 has no addresses")
@@ -270,16 +270,16 @@ func TestPointToPointSend(t *testing.T) {
 
 	t.Logf("Network 2 addresses: %v", addrs)
 
-	// 连接网络1到网络2
+	// Connect network 1 to network 2
 	err = n1.ConnectToPeer(addrs[0])
 	if err != nil {
 		t.Fatalf("Failed to connect networks: %v", err)
 	}
 
-	// 等待连接建立
+	// Wait for connection to establish
 	time.Sleep(500 * time.Millisecond)
 
-	// 验证连接状态
+	// Verify connection status
 	peers1 := n1.GetPeers()
 	peers2 := n2.GetPeers()
 
@@ -294,7 +294,7 @@ func TestPointToPointSend(t *testing.T) {
 		t.Error("Network 2 has no peers")
 	}
 
-	// 注册请求处理器
+	// Register request handler
 	responseData := []byte("response data")
 	n2.RegisterRequestHandler("test-request", func(from string, req Request) ([]byte, error) {
 		t.Logf("Network 2 received request from %s: type=%s, data=%s", from, req.Type, string(req.Data))
@@ -304,20 +304,20 @@ func TestPointToPointSend(t *testing.T) {
 		return responseData, nil
 	})
 
-	// 等待处理器注册完成
+	// Wait for handler registration to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// 发送点对点请求
+	// Send point-to-point request
 	peerID2 := n2.GetLocalPeerID()
 	requestData := []byte("request data")
 
 	t.Logf("Sending request from %s to %s", n1.GetLocalPeerID(), peerID2)
 
-	// 使用带超时的上下文发送请求
+	// Send request with timeout context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// 在goroutine中发送请求以避免阻塞
+	// Send request in goroutine to avoid blocking
 	responseChan := make(chan []byte, 1)
 	errChan := make(chan error, 1)
 
@@ -330,11 +330,11 @@ func TestPointToPointSend(t *testing.T) {
 		responseChan <- response
 	}()
 
-	// 等待响应或超时
+	// Wait for response or timeout
 	select {
 	case response := <-responseChan:
 		t.Logf("Received response: %s", string(response))
-		// 验证响应
+		// Verify response
 		if string(response) != string(responseData) {
 			t.Errorf("Expected response '%s', got '%s'", string(responseData), string(response))
 		}
@@ -344,30 +344,30 @@ func TestPointToPointSend(t *testing.T) {
 		t.Fatal("Request timed out")
 	}
 
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel1()
 	cancel2()
 
-	// 等待网络关闭
+	// Wait for network to shut down
 	time.Sleep(500 * time.Millisecond)
 }
 
-// 添加广播功能测试用例
+// Add broadcast functionality test case
 func TestBroadcastFunctionality(t *testing.T) {
-	// 创建两个网络实例用于测试
+	// Create two network instances for testing
 	cfg1 := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
 	cfg2 := &NetworkConfig{
 		Host:     "127.0.0.1",
-		Port:     0, // 使用随机端口
+		Port:     0, // Use random port
 		MaxPeers: 10,
 	}
 
-	// 创建两个网络实例
+	// Create two network instances
 	n1, err := New(cfg1)
 	if err != nil {
 		t.Fatalf("Failed to create network 1: %v", err)
@@ -378,13 +378,13 @@ func TestBroadcastFunctionality(t *testing.T) {
 		t.Fatalf("Failed to create network 2: %v", err)
 	}
 
-	// 创建带超时的上下文
+	// Create context with timeout
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel1()
 	defer cancel2()
 
-	// 在goroutine中运行两个网络
+	// Run two networks in goroutine
 	go func() {
 		err := n1.Run(ctx1)
 		if err != nil && err != context.Canceled {
@@ -399,25 +399,25 @@ func TestBroadcastFunctionality(t *testing.T) {
 		}
 	}()
 
-	// 等待网络启动
+	// Wait for networks to start
 	time.Sleep(500 * time.Millisecond)
 
-	// 获取网络2的地址并连接
+	// Get network 2 address and connect
 	addrs := n2.GetLocalAddresses()
 	if len(addrs) == 0 {
 		t.Fatal("Network 2 has no addresses")
 	}
 
-	// 连接网络1到网络2
+	// Connect network 1 to network 2
 	err = n1.ConnectToPeer(addrs[0])
 	if err != nil {
 		t.Fatalf("Failed to connect networks: %v", err)
 	}
 
-	// 等待连接建立
+	// Wait for connection to establish
 	time.Sleep(500 * time.Millisecond)
 
-	// 验证连接状态
+	// Verify connection status
 	peers1 := n1.GetPeers()
 	peers2 := n2.GetPeers()
 
@@ -429,10 +429,10 @@ func TestBroadcastFunctionality(t *testing.T) {
 		t.Error("Network 2 has no peers")
 	}
 
-	// 用于接收消息的通道
+	// Channel for receiving messages
 	receivedMessages := make(chan NetMessage, 10)
 
-	// 注册消息处理器
+	// Register message handlers
 	n1.RegisterMessageHandler("test-topic", func(from string, msg NetMessage) error {
 		receivedMessages <- msg
 		return nil
@@ -443,20 +443,20 @@ func TestBroadcastFunctionality(t *testing.T) {
 		return nil
 	})
 
-	// 等待订阅建立
+	// Wait for subscriptions to establish
 	time.Sleep(500 * time.Millisecond)
 
-	// 从网络1广播消息
+	// Broadcast message from network 1
 	messageData := []byte("broadcast message")
 	err = n1.BroadcastMessage("test-topic", messageData)
 	if err != nil {
 		t.Fatalf("Failed to broadcast message: %v", err)
 	}
 
-	// 等待消息传递
+	// Wait for message delivery
 	time.Sleep(1 * time.Second)
 
-	// 检查是否收到了消息
+	// Check if messages were received
 	close(receivedMessages)
 	receivedCount := 0
 	for msg := range receivedMessages {
@@ -466,16 +466,16 @@ func TestBroadcastFunctionality(t *testing.T) {
 		}
 	}
 
-	// 至少应该收到一条消息（来自网络2）
+	// Should receive at least one message (from network 2)
 	if receivedCount == 0 {
 		t.Error("No messages received")
 	}
 
-	// 取消上下文以停止网络
+	// Cancel context to stop network
 	cancel1()
 	cancel2()
 
-	// 等待网络关闭
+	// Wait for network to shut down
 	time.Sleep(500 * time.Millisecond)
 }
 

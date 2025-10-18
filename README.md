@@ -1,83 +1,70 @@
-# 基于go-libp2p的通用网络模块
+# Universal Network Module Based on go-libp2p
 
-## 概述
+## Overview
 
-这是一个基于go-libp2p的通用网络模块，可用于区块链、聊天系统等多种P2P应用场景。该模块提供简单易用的API，支持广播模式和点对点请求模式，并为广播模式提供过滤功能。
+This is a universal network module based on go-libp2p, which can be used in various P2P application scenarios such as blockchain and chat systems. The module provides simple and easy-to-use APIs, supporting both broadcast mode and point-to-point request mode, with filtering functionality for broadcast mode.
 
-## 功能特性
+## Features
 
-- **双重通信模式**：支持广播模式（发布/订阅）和点对点请求/响应模式
-- **简单易用**：提供简洁的API接口，降低P2P网络编程的复杂性
-- **消息过滤**：广播模式支持消息过滤功能
-- **自动发现**：支持mDNS本地节点发现（可配置启用/禁用）
-- **安全传输**：基于libp2p的安全传输协议
-- **可扩展性**：模块化设计，易于集成到不同类型的项目中
+- **Dual Communication Modes**: Supports broadcast mode (publish/subscribe) and point-to-point request/response mode
+- **Easy to Use**: Provides clean API interfaces to reduce the complexity of P2P network programming
+- **Message Filtering**: Broadcast mode supports message filtering functionality
+- **Automatic Discovery**: Supports mDNS local node discovery (can be configured to enable/disable)
+- **Secure Transport**: Based on libp2p secure transport protocols
+- **Extensibility**: Modular design, easy to integrate into different types of projects
 
-## 安装
+## Installation
 
 ```bash
 go get github.com/lengzhao/network
 ```
 
-## 快速开始
+## Quick Start
 
-### 1. 创建网络实例
+### 1. Create Network Instance
 
 ```go
 import (
     "github.com/lengzhao/network"
 )
 
-// 方法1: 使用NewNetworkConfig创建默认配置（推荐）
+// Method 1: Use NewNetworkConfig to create default configuration (recommended)
 cfg := network.NewNetworkConfig()
 cfg.Host = "0.0.0.0"
 cfg.Port = 8000
 cfg.MaxPeers = 100
 cfg.PrivateKeyPath = "./private_key.pem"
-cfg.BootstrapPeers = []string{} // 可选的引导节点
-// cfg.DisableMDNS 默认为false，即默认启用MDNS
+cfg.BootstrapPeers = []string{} // Optional bootstrap nodes
 
-// 方法2: 直接创建配置
-/*
-cfg := &network.NetworkConfig{
-    Host:           "0.0.0.0",
-    Port:           8000,
-    MaxPeers:       100,
-    PrivateKeyPath: "./private_key.pem",
-    BootstrapPeers: []string{}, // 可选的引导节点
-    DisableMDNS:    false,      // 是否禁用mDNS本地发现（默认为false，即默认启用）
-}
-*/
-
-// 创建网络实例
+// Create network instance
 net, err := network.New(cfg)
 if err != nil {
     log.Fatalf("Failed to create network: %v", err)
 }
 ```
 
-### 2. 注册消息处理器
+### 2. Register Message Handlers
 
 ```go
-// 注册广播消息处理器
+// Register broadcast message handler
 net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
     fmt.Printf("Received broadcast message from %s: %s\n", from, string(msg.Data))
     return nil
 })
 
-// 注册点对点请求处理器
+// Register point-to-point request handler
 net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
-    // 回显请求数据作为响应
+    // Echo request data as response
     return req.Data, nil
 })
 ```
 
-### 3. 注册消息过滤器（可选）
+### 3. Register Message Filter (Optional)
 
 ```go
-// 注册消息过滤器
+// Register message filter
 net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
-    // 过滤掉包含"spam"的消息
+    // Filter out messages containing "spam"
     if string(msg.Data) == "spam" {
         return false
     }
@@ -85,33 +72,33 @@ net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
 })
 ```
 
-### 4. 启动网络
+### 4. Start Network
 
 ```go
 ctx, cancel := context.WithCancel(context.Background())
 defer cancel()
 
-// 在goroutine中运行网络
+// Run network in goroutine
 go func() {
     if err := net.Run(ctx); err != nil {
         log.Printf("Network stopped with error: %v", err)
     }
 }()
 
-// 等待网络启动
+// Wait for network to start
 time.Sleep(1 * time.Second)
 ```
 
-### 5. 使用网络功能
+### 5. Use Network Functions
 
 ```go
-// 广播消息
+// Broadcast message
 err = net.BroadcastMessage("chat", []byte("Hello, world!"))
 if err != nil {
     log.Printf("Failed to broadcast message: %v", err)
 }
 
-// 发送点对点请求
+// Send point-to-point request
 response, err := net.SendRequest(targetPeerID, "echo", []byte("Hello!"))
 if err != nil {
     log.Printf("Failed to send request: %v", err)
@@ -120,97 +107,94 @@ if err != nil {
 }
 ```
 
-## 配置选项
+## Configuration Options
 
-### NetworkConfig 配置说明
+### NetworkConfig Configuration Description
 
-| 字段名 | 类型 | 说明 | 默认值 |
-|-------|------|------|--------|
-| Host | string | 监听地址 | "0.0.0.0" |
-| Port | int | 监听端口 | 0 |
-| MaxPeers | int | 最大连接数 | 100 |
-| PrivateKeyPath | string | 私钥文件路径 | "" |
-| BootstrapPeers | []string | Bootstrap节点地址列表 | 空数组 |
-| PeerWhitelist | []string | 节点白名单(节点ID字符串列表) | 空数组 |
-| LogConfig | *log.LogConfig | 日志配置 | nil |
-| DisableMDNS | bool | 是否禁用MDNS发现功能 | false (使用NewNetworkConfig()创建时) |
-| EnablePeerScoring | bool | 是否启用Peer评分 | true |
-| DiscoveryInterval | time.Duration | 节点发现间隔 | 1分钟 |
-| MaxIPColocation | int | 单个IP地址最大节点数 | 3 |
-| ScoreInspectInterval | time.Duration | 评分检查间隔 | 1分钟 |
-| IPColocationWeight | float64 | IP共置权重 | -0.1 |
-| BehaviourWeight | float64 | 行为权重 | -1.0 |
-| BehaviourDecay | float64 | 行为衰减因子 | 0.98 |
+| Field Name | Type | Description | Default Value |
+|------------|------|-------------|---------------|
+| Host | string | Listening address | "0.0.0.0" |
+| Port | int | Listening port | 0 |
+| MaxPeers | int | Maximum number of connections | 100 |
+| PrivateKeyPath | string | Private key file path | "" |
+| BootstrapPeers | []string | Bootstrap node address list | Empty array |
+| PeerWhitelist | []string | Node whitelist (list of node ID strings) | Empty array |
+| LogConfig | *log.LogConfig | Log configuration | nil |
+| DisableMDNS | bool | Whether to disable MDNS discovery | false (when created with NewNetworkConfig()) |
+| EnablePeerScoring | bool | Whether to enable Peer scoring | true |
+| DiscoveryInterval | time.Duration | Node discovery interval | 1 minute |
+| MaxIPColocation | int | Maximum number of nodes per IP address | 3 |
+| ScoreInspectInterval | time.Duration | Score inspection interval | 1 minute |
+| IPColocationWeight | float64 | IP colocation weight | -0.1 |
+| BehaviourWeight | float64 | Behavior weight | -1.0 |
+| BehaviourDecay | float64 | Behavior decay factor | 0.98 |
 
-**注意**: 当直接创建NetworkConfig结构体时，DisableMDNS的零值为false，表示默认启用MDNS。建议使用network.NewNetworkConfig()函数创建配置实例以获得正确的默认值。
+**Note**: When directly creating a NetworkConfig struct, the zero value of DisableMDNS is false, meaning mDNS is enabled by default. It is recommended to use the network.NewNetworkConfig() function to create configuration instances to get correct default values.
 
-## API参考
+## API Reference
 
-### NetworkInterface 接口
+### NetworkInterface Interface
 
 ```go
 type NetworkInterface interface {
-    // Run 启动网络模块并运行
+    // Run Start the network module and run
     Run(ctx context.Context) error
 
-    // BroadcastMessage 广播消息到指定主题
+    // BroadcastMessage Broadcast message to specified topic
     BroadcastMessage(topic string, data []byte) error
 
-    // RegisterMessageHandler 注册广播消息处理器
+    // RegisterMessageHandler Register broadcast message handler
     RegisterMessageHandler(topic string, handler MessageHandler)
 
-    // RegisterRequestHandler 注册点对点请求处理器
+    // RegisterRequestHandler Register point-to-point request handler
     RegisterRequestHandler(requestType string, handler RequestHandler)
 
-    // SendRequest 发送点对点请求
+    // SendRequest Send point-to-point request
     SendRequest(peerID string, requestType string, data []byte) ([]byte, error)
 
-    // ConnectToPeer 连接到指定节点
+    // ConnectToPeer Connect to specified peer
     ConnectToPeer(addr string) error
 
-    // GetPeers 获取连接的节点列表
+    // GetPeers Get list of connected peers
     GetPeers() []string
 
-    // GetLocalAddresses 获取本地节点的地址列表
+    // GetLocalAddresses Get local peer address list
     GetLocalAddresses() []string
 
-    // GetLocalPeerID 获取本地节点的Peer ID
+    // GetLocalPeerID Get local peer ID
     GetLocalPeerID() string
 
-    // RegisterMessageFilter 注册广播消息过滤器
+    // RegisterMessageFilter Register broadcast message filter
     RegisterMessageFilter(topic string, filter MessageFilter)
-    
-    // RegisterPeerScoreInspector 注册Peer评分检查器
-    RegisterPeerScoreInspector(inspector PeerScoreInspector)
 }
 ```
 
-## 运行示例
+## Run Examples
 
-```
-# 运行基本示例
+```bash
+# Run basic example
 go run examples/base/basic_example.go
 
-# 运行双节点示例
+# Run two-node example
 go run examples/two_node/two_node_example.go
 
-# 运行MDNS配置示例
+# Run MDNS configuration example
 go run examples/mdns/mdns_example.go
 ```
 
-## 测试
+## Testing
 
+```bash
+# Run unit tests
+go test -v ./...
 ```
-# 运行单元测试
-go test -v ./network/...
-```
 
-## 依赖
+## Dependencies
 
-- [go-libp2p](https://github.com/libp2p/go-libp2p) - libp2p Go实现
-- [go-libp2p-pubsub](https://github.com/libp2p/go-libp2p-pubsub) - libp2p发布/订阅系统
-- [go-libp2p-kad-dht](https://github.com/libp2p/go-libp2p-kad-dht) - Kademlia DHT实现
+- [go-libp2p](https://github.com/libp2p/go-libp2p) - libp2p Go implementation
+- [go-libp2p-pubsub](https://github.com/libp2p/go-libp2p-pubsub) - libp2p publish/subscribe system
+- [go-libp2p-kad-dht](https://github.com/libp2p/go-libp2p-kad-dht) - Kademlia DHT implementation
 
-## 许可证
+## License
 
 MIT
