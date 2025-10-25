@@ -3,11 +3,71 @@ package tests
 import (
 	"bytes"
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/lengzhao/network"
 )
+
+// NetMessage Message structure in broadcast mode
+type NetMessage struct {
+	From  string // Peer ID of the message sender
+	Topic string // Topic to which the message belongs
+	Data  []byte // Message data
+}
+
+// messageCollector 用于收集广播消息
+type messageCollector struct {
+	messages []NetMessage
+	mu       sync.Mutex
+}
+
+func (mc *messageCollector) addMessage(msg NetMessage) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.messages = append(mc.messages, msg)
+}
+
+func (mc *messageCollector) getMessages() []NetMessage {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	// 返回副本以避免数据竞争
+	result := make([]NetMessage, len(mc.messages))
+	copy(result, mc.messages)
+	return result
+}
+
+func (mc *messageCollector) clear() {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.messages = []NetMessage{}
+}
+
+// createTestNetwork 创建测试网络实例
+func createTestNetwork(t *testing.T, host string, port int) network.NetworkInterface {
+	cfg := &network.NetworkConfig{
+		Host:     host,
+		Port:     port,
+		MaxPeers: 10,
+	}
+
+	n, err := network.New(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create network: %v", err)
+	}
+
+	return n
+}
+
+// cleanupNetworks 清理网络资源
+func cleanupNetworks(_ context.Context, cancel context.CancelFunc, _ ...network.NetworkInterface) {
+	// 取消上下文以停止网络
+	cancel()
+
+	// 等待网络关闭
+	time.Sleep(500 * time.Millisecond)
+}
 
 // TestMessageFilterBasic Basic message filtering test
 func TestMessageFilterBasic(t *testing.T) {
@@ -42,14 +102,14 @@ func TestMessageFilterBasic(t *testing.T) {
 	// Register message handler and message filter on Node2, filter rejects messages containing "filtered" keyword
 	collector := &messageCollector{}
 
-	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		collector.addMessage(msg)
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		collector.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 
-	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
+	n2.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
 		// Reject messages containing "filtered" keyword
-		return !bytes.Contains(msg.Data, []byte("filtered"))
+		return !bytes.Contains(data, []byte("filtered"))
 	})
 
 	// Wait for subscriptions to establish
@@ -139,24 +199,24 @@ func TestMessageFilterNoForward(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Register filter on Node2 that rejects messages containing "do-not-forward" keyword
-	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
-		t.Logf("Filtered message: %t", !bytes.Contains(msg.Data, []byte("do-not-forward")))
+	n2.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
+		t.Logf("Filtered message: %t", !bytes.Contains(data, []byte("do-not-forward")))
 		// Reject messages containing "do-not-forward" keyword
-		return !bytes.Contains(msg.Data, []byte("do-not-forward"))
+		return !bytes.Contains(data, []byte("do-not-forward"))
 	})
 
 	collector2 := &messageCollector{}
-	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		t.Logf("Received message: %s", string(msg.Data))
-		collector2.addMessage(msg)
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		t.Logf("Received message: %s", string(data))
+		collector2.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 
 	// Register message handler on Node3
 	collector3 := &messageCollector{}
-	n3.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		t.Logf("Received message: %s", string(msg.Data))
-		collector3.addMessage(msg)
+	n3.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		t.Logf("Received message: %s", string(data))
+		collector3.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 
@@ -243,14 +303,14 @@ func TestMessageFilterDynamic(t *testing.T) {
 	// Register message handler and initial filter on Node2
 	collector := &messageCollector{}
 
-	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		collector.addMessage(msg)
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		collector.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 
 	// Initial filter: reject messages containing "blocked" keyword
-	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
-		return !bytes.Contains(msg.Data, []byte("blocked"))
+	n2.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
+		return !bytes.Contains(data, []byte("blocked"))
 	})
 
 	// Wait for subscriptions to establish
@@ -287,8 +347,8 @@ func TestMessageFilterDynamic(t *testing.T) {
 	collector.clear()
 
 	// Update filter: now reject messages containing "forbidden" keyword
-	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
-		return !bytes.Contains(msg.Data, []byte("forbidden"))
+	n2.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
+		return !bytes.Contains(data, []byte("forbidden"))
 	})
 
 	// Wait for filter update to take effect
@@ -388,25 +448,25 @@ func TestMessageFilterMultiple(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Register filter on Node2: reject messages containing "node2-blocked" keyword
-	n2.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
-		return !bytes.Contains(msg.Data, []byte("node2-blocked"))
+	n2.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
+		return !bytes.Contains(data, []byte("node2-blocked"))
 	})
 
 	// Register filter on Node3: reject messages containing "node3-blocked" keyword
-	n3.RegisterMessageFilter("test-topic", func(msg network.NetMessage) bool {
-		return !bytes.Contains(msg.Data, []byte("node3-blocked"))
+	n3.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
+		return !bytes.Contains(data, []byte("node3-blocked"))
 	})
 
 	// Register message handler on Node2 and Node3
 	collector2 := &messageCollector{}
-	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		collector2.addMessage(msg)
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		collector2.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 
 	collector3 := &messageCollector{}
-	n3.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		collector3.addMessage(msg)
+	n3.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		collector3.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 

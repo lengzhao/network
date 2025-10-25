@@ -31,15 +31,15 @@ func main() {
 	}
 
 	// Register broadcast message handler
-	net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-		fmt.Printf("[%s] Received message from %s: %s\n", time.Now().Format("15:04:05"), from[:8], string(msg.Data))
+	net.RegisterMessageHandler("chat", func(from string, topic string, data []byte) error {
+		fmt.Printf("[%s] Received message from %s: %s\n", time.Now().Format("15:04:05"), from[:8], string(data))
 		return nil
 	})
 
 	// Register point-to-point request handler
-	net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
-		fmt.Printf("[%s] Received echo request from %s: %s\n", time.Now().Format("15:04:05"), from[:8], string(req.Data))
-		return req.Data, nil
+	net.RegisterRequestHandler("echo", func(from string, reqType string, data []byte) ([]byte, error) {
+		fmt.Printf("[%s] Received echo request from %s: %s\n", time.Now().Format("15:04:05"), from[:8], string(data))
+		return data, nil
 	})
 
 	// Print local node addresses

@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/lengzhao/network"
 )
 
 // TestImprovedPointToPointSend 测试改进后的点对点消息发送功能
@@ -66,11 +64,11 @@ func TestImprovedPointToPointSend(t *testing.T) {
 
 	// 注册请求处理器
 	responseData := []byte("response data")
-	n2.RegisterRequestHandler("test-request", func(from string, req network.Request) ([]byte, error) {
+	n2.RegisterRequestHandler("test-request", func(from string, reqType string, data []byte) ([]byte, error) {
 		// 验证请求数据
 		expectedData := []byte("request data")
-		if string(req.Data) != string(expectedData) {
-			t.Errorf("Request data mismatch. Expected: %s, Got: %s", string(expectedData), string(req.Data))
+		if string(data) != string(expectedData) {
+			t.Errorf("netRequest data mismatch. Expected: %s, Got: %s", string(expectedData), string(data))
 		}
 
 		return responseData, nil
@@ -89,7 +87,7 @@ func TestImprovedPointToPointSend(t *testing.T) {
 
 	// 验证响应数据
 	if string(resp) != string(responseData) {
-		t.Errorf("Response data mismatch. Expected: %s, Got: %s", string(responseData), string(resp))
+		t.Errorf("netResponse data mismatch. Expected: %s, Got: %s", string(responseData), string(resp))
 	}
 
 	// 测试错误处理：发送一个没有处理器的请求
@@ -151,7 +149,7 @@ func TestPointToPointTimeout(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// 注册一个会超时的请求处理器
-	n2.RegisterRequestHandler("slow-request", func(from string, req network.Request) ([]byte, error) {
+	n2.RegisterRequestHandler("slow-request", func(from string, reqType string, data []byte) ([]byte, error) {
 		// 模拟处理时间过长（超过新的超时时间）
 		time.Sleep(6 * time.Minute) // 超过5分钟超时
 		return []byte("slow response"), nil

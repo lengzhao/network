@@ -71,14 +71,8 @@ func (n *Network) topicValidatorHandler(ctx context.Context, pid peer.ID, msg *p
 
 	// Apply filter if MessageFilter exists
 	if exists {
-		netMsg := NetMessage{
-			From:  msg.ReceivedFrom.String(),
-			Topic: topicName,
-			Data:  msg.Data,
-		}
-
 		// Reject message if filter returns false
-		if !filter(netMsg) {
+		if !filter(msg.ReceivedFrom.String(), topicName, msg.Data) {
 			return pubsub.ValidationReject // Reject message
 		}
 	}
@@ -429,14 +423,8 @@ func (n *Network) processPubsubMessage(topicName string, msg *pubsub.Message) {
 
 	// Apply general filter
 	if filterExists {
-		netMsg := NetMessage{
-			From:  msg.ReceivedFrom.String(),
-			Topic: topicName,
-			Data:  msg.Data,
-		}
-
 		// Discard message if filter returns false
-		if !filter(netMsg) {
+		if !filter(msg.ReceivedFrom.String(), topicName, msg.Data) {
 			return
 		}
 	}
@@ -450,13 +438,7 @@ func (n *Network) processPubsubMessage(topicName string, msg *pubsub.Message) {
 		return
 	}
 
-	netMsg := NetMessage{
-		From:  msg.ReceivedFrom.String(),
-		Topic: topicName,
-		Data:  msg.Data,
-	}
-
-	if err := handler(msg.ReceivedFrom.String(), netMsg); err != nil {
+	if err := handler(msg.ReceivedFrom.String(), topicName, msg.Data); err != nil {
 		slog.With("module", "network.pubsub").Error("failed to process message", "error", err)
 	}
 }
@@ -522,11 +504,11 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	}
 
 	// Parse request
-	var req Request
+	var req netRequest
 	if err := req.Deserialize(data); err != nil {
 		slog.With("module", "network.request").Error("failed to deserialize request", "error", err)
 		// Send error response
-		resp := Response{
+		resp := netResponse{
 			Type: "error",
 			Data: []byte("failed to deserialize request: " + err.Error()),
 		}
@@ -547,7 +529,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	if !exists {
 		slog.With("module", "network.request").Warn("no handler found for request type", "type", req.Type)
 		// Send error response
-		resp := Response{
+		resp := netResponse{
 			Type: "error",
 			Data: []byte("no handler found for request type: " + req.Type),
 		}
@@ -559,11 +541,11 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	}
 
 	// Process request
-	respData, err := handler(stream.Conn().RemotePeer().String(), req)
+	respData, err := handler(stream.Conn().RemotePeer().String(), req.Type, req.Data)
 	if err != nil {
 		slog.With("module", "network.request").Error("failed to process request", "error", err)
 		// Send error response
-		resp := Response{
+		resp := netResponse{
 			Type: "error",
 			Data: []byte(err.Error()),
 		}
@@ -575,7 +557,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	}
 
 	// Send response
-	resp := Response{
+	resp := netResponse{
 		Type: req.Type,
 		Data: respData,
 	}
@@ -583,7 +565,7 @@ func (n *Network) handleRequest(stream libp2pnetwork.Stream) {
 	if err != nil {
 		slog.With("module", "network.request").Error("failed to serialize response", "error", err)
 		// Send serialization error response
-		errorResp := Response{
+		errorResp := netResponse{
 			Type: "error",
 			Data: []byte("failed to serialize response: " + err.Error()),
 		}
@@ -633,7 +615,7 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 	}
 
 	// Construct request
-	req := Request{
+	req := netRequest{
 		Type: requestType,
 		Data: data,
 	}
@@ -673,7 +655,7 @@ func (n *Network) SendRequest(peerID string, requestType string, data []byte) ([
 	}
 
 	// Parse response
-	var resp Response
+	var resp netResponse
 	if err := resp.Deserialize(responseData); err != nil {
 		return nil, fmt.Errorf("failed to deserialize response: %w", err)
 	}

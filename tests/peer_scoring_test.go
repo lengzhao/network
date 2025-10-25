@@ -160,16 +160,16 @@ func TestPeerScoringWithBroadcast(t *testing.T) {
 	}
 
 	// 用于接收消息的通道
-	receivedMessages := make(chan network.NetMessage, 10)
+	receivedMessages := make(chan NetMessage, 10)
 
 	// 注册消息处理器
-	n1.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		receivedMessages <- msg
+	n1.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		receivedMessages <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
-	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		receivedMessages <- msg
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		receivedMessages <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
@@ -187,7 +187,7 @@ func TestPeerScoringWithBroadcast(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 验证消息被接收
-	messages := make([]network.NetMessage, 0)
+	messages := make([]NetMessage, 0)
 	close(receivedMessages)
 	for msg := range receivedMessages {
 		messages = append(messages, msg)

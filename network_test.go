@@ -9,7 +9,12 @@ import (
 	"time"
 )
 
-// Add test helper functions and structures
+// NetMessage Message structure in broadcast mode
+type NetMessage struct {
+	From  string // Peer ID of the message sender
+	Topic string // Topic to which the message belongs
+	Data  []byte // Message data
+}
 
 // messageCollector Used to collect broadcast messages
 type messageCollector struct {
@@ -95,7 +100,7 @@ func TestMessageHandlerRegistration(t *testing.T) {
 	n := createTestNetwork(t, "127.0.0.1", 0)
 
 	// Create message handler
-	handler := func(from string, msg NetMessage) error {
+	handler := func(from string, topic string, data []byte) error {
 		return nil
 	}
 
@@ -143,7 +148,7 @@ func TestRequestHandlerRegistration(t *testing.T) {
 	}
 
 	// Register request handler
-	handler := func(from string, req Request) ([]byte, error) {
+	handler := func(from string, reqType string, data []byte) ([]byte, error) {
 		return []byte("response"), nil
 	}
 
@@ -167,7 +172,7 @@ func TestMessageFilterRegistration(t *testing.T) {
 	}
 
 	// Register message filter
-	filter := func(msg NetMessage) bool {
+	filter := func(from string, topic string, data []byte) bool {
 		return true // Accept all messages
 	}
 
@@ -296,10 +301,10 @@ func TestPointToPointSend(t *testing.T) {
 
 	// Register request handler
 	responseData := []byte("response data")
-	n2.RegisterRequestHandler("test-request", func(from string, req Request) ([]byte, error) {
-		t.Logf("Network 2 received request from %s: type=%s, data=%s", from, req.Type, string(req.Data))
-		if req.Type != "test-request" {
-			t.Errorf("Expected request type 'test-request', got '%s'", req.Type)
+	n2.RegisterRequestHandler("test-request", func(from string, reqType string, data []byte) ([]byte, error) {
+		t.Logf("Network 2 received request from %s: type=%s, data=%s", from, reqType, string(data))
+		if reqType != "test-request" {
+			t.Errorf("Expected request type 'test-request', got '%s'", reqType)
 		}
 		return responseData, nil
 	})
@@ -341,7 +346,7 @@ func TestPointToPointSend(t *testing.T) {
 	case err := <-errChan:
 		t.Fatalf("Failed to send request: %v", err)
 	case <-ctx.Done():
-		t.Fatal("Request timed out")
+		t.Fatal("netRequest timed out")
 	}
 
 	// Cancel context to stop network
@@ -433,13 +438,13 @@ func TestBroadcastFunctionality(t *testing.T) {
 	receivedMessages := make(chan NetMessage, 10)
 
 	// Register message handlers
-	n1.RegisterMessageHandler("test-topic", func(from string, msg NetMessage) error {
-		receivedMessages <- msg
+	n1.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		receivedMessages <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
-	n2.RegisterMessageHandler("test-topic", func(from string, msg NetMessage) error {
-		receivedMessages <- msg
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		receivedMessages <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
@@ -519,7 +524,7 @@ func TestP2PBasicRequest(t *testing.T) {
 
 	// 在Node2上注册请求处理器，处理"test-request"类型的请求，返回预定义的响应数据
 	responseData := []byte("response data from node2")
-	n2.RegisterRequestHandler("test-request", func(from string, req Request) ([]byte, error) {
+	n2.RegisterRequestHandler("test-request", func(from string, reqType string, data []byte) ([]byte, error) {
 		return responseData, nil
 	})
 
@@ -655,7 +660,7 @@ func TestP2PLargeData(t *testing.T) {
 		responseData[i] = byte(i % 256)
 	}
 
-	n2.RegisterRequestHandler("large-data-request", func(from string, req Request) ([]byte, error) {
+	n2.RegisterRequestHandler("large-data-request", func(from string, reqType string, data []byte) ([]byte, error) {
 		return responseData, nil
 	})
 
@@ -676,12 +681,12 @@ func TestP2PLargeData(t *testing.T) {
 
 	// 验证Node1能正确接收到完整响应
 	if len(response) != len(responseData) {
-		t.Errorf("Response data length mismatch, expected: %d, got: %d", len(responseData), len(response))
+		t.Errorf("netResponse data length mismatch, expected: %d, got: %d", len(responseData), len(response))
 	}
 
 	// 验证大数据在传输过程中没有损坏
 	if !bytes.Equal(response, responseData) {
-		t.Error("Response data content mismatch - data corruption detected")
+		t.Error("netResponse data content mismatch - data corruption detected")
 	}
 
 	// 清理资源
@@ -729,14 +734,14 @@ func TestMessageFilterUnified(t *testing.T) {
 	// 在Node2上注册消息处理器和消息过滤器，过滤器拒绝包含"filtered"关键字的消息
 	collector := &messageCollector{}
 
-	n2.RegisterMessageHandler("test-topic", func(from string, msg NetMessage) error {
-		collector.addMessage(msg)
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		collector.addMessage(NetMessage{From: from, Topic: topic, Data: data})
 		return nil
 	})
 
-	n2.RegisterMessageFilter("test-topic", func(msg NetMessage) bool {
+	n2.RegisterMessageFilter("test-topic", func(from string, topic string, data []byte) bool {
 		// 拒绝包含"filtered"关键字的消息
-		return !bytes.Contains(msg.Data, []byte("filtered"))
+		return !bytes.Contains(data, []byte("filtered"))
 	})
 
 	// 等待订阅建立

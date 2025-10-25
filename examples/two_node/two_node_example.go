@@ -42,36 +42,36 @@ func main() {
 	}
 
 	// Register handlers for node 1
-	net1.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-		fmt.Printf("[Node 1] Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
+	net1.RegisterMessageHandler("chat", func(from string, topic string, data []byte) error {
+		fmt.Printf("[Node 1] Received broadcast message from %s on topic %s: %s\n", from, topic, string(data))
 		return nil
 	})
 
 	// Node 1 needs to handle echo and query requests from node 2
-	net1.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
-		fmt.Printf("[Node 1] Received echo request from %s: %s\n", from, string(req.Data))
-		return append([]byte("Echo: "), req.Data...), nil
+	net1.RegisterRequestHandler("echo", func(from string, reqType string, data []byte) ([]byte, error) {
+		fmt.Printf("[Node 1] Received echo request from %s: %s\n", from, string(data))
+		return append([]byte("Echo: "), data...), nil
 	})
 
-	net1.RegisterRequestHandler("query", func(from string, req network.Request) ([]byte, error) {
-		fmt.Printf("[Node 1] Received query from %s: %s\n", from, string(req.Data))
+	net1.RegisterRequestHandler("query", func(from string, reqType string, data []byte) ([]byte, error) {
+		fmt.Printf("[Node 1] Received query from %s: %s\n", from, string(data))
 		return []byte("Current time: " + time.Now().Format(time.RFC3339)), nil
 	})
 
 	// Register handlers for node 2
-	net2.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-		fmt.Printf("[Node 2] Received broadcast message from %s on topic %s: %s\n", from, msg.Topic, string(msg.Data))
+	net2.RegisterMessageHandler("chat", func(from string, topic string, data []byte) error {
+		fmt.Printf("[Node 2] Received broadcast message from %s on topic %s: %s\n", from, topic, string(data))
 		return nil
 	})
 
 	// Node 2 needs to handle echo and query requests from node 1
-	net2.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
-		fmt.Printf("[Node 2] Received echo request from %s: %s\n", from, string(req.Data))
-		return append([]byte("Echo: "), req.Data...), nil
+	net2.RegisterRequestHandler("echo", func(from string, reqType string, data []byte) ([]byte, error) {
+		fmt.Printf("[Node 2] Received echo request from %s: %s\n", from, string(data))
+		return append([]byte("Echo: "), data...), nil
 	})
 
-	net2.RegisterRequestHandler("query", func(from string, req network.Request) ([]byte, error) {
-		fmt.Printf("[Node 2] Received query from %s: %s\n", from, string(req.Data))
+	net2.RegisterRequestHandler("query", func(from string, reqType string, data []byte) ([]byte, error) {
+		fmt.Printf("[Node 2] Received query from %s: %s\n", from, string(data))
 		return []byte("Current time: " + time.Now().Format(time.RFC3339)), nil
 	})
 

@@ -5,8 +5,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/lengzhao/network"
 )
 
 // TestBroadcastFunctionality Test broadcast functionality
@@ -67,16 +65,16 @@ func TestBroadcastFunctionality(t *testing.T) {
 	}
 
 	// Channel for receiving messages
-	receivedMessages := make(chan network.NetMessage, 10)
+	receivedMessages := make(chan NetMessage, 10)
 
 	// Register message handlers
-	n1.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		receivedMessages <- msg
+	n1.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		receivedMessages <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
-	n2.RegisterMessageHandler("test-topic", func(from string, msg network.NetMessage) error {
-		receivedMessages <- msg
+	n2.RegisterMessageHandler("test-topic", func(from string, topic string, data []byte) error {
+		receivedMessages <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
@@ -95,7 +93,7 @@ func TestBroadcastFunctionality(t *testing.T) {
 
 	// Verify both nodes receive messages through messageCollector
 	// Note: Sender will not receive their own message, so only expect 1 message (from n2)
-	messages := make([]network.NetMessage, 0)
+	messages := make([]NetMessage, 0)
 
 	close(receivedMessages)
 	for msg := range receivedMessages {
@@ -181,27 +179,27 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 	}
 
 	// Channel for receiving messages
-	receivedMessagesTopic1 := make(chan network.NetMessage, 10)
-	receivedMessagesTopic2 := make(chan network.NetMessage, 10)
+	receivedMessagesTopic1 := make(chan NetMessage, 10)
+	receivedMessagesTopic2 := make(chan NetMessage, 10)
 
 	// Register message handlers
-	n1.RegisterMessageHandler("topic1", func(from string, msg network.NetMessage) error {
-		receivedMessagesTopic1 <- msg
+	n1.RegisterMessageHandler("topic1", func(from string, topic string, data []byte) error {
+		receivedMessagesTopic1 <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
-	n2.RegisterMessageHandler("topic1", func(from string, msg network.NetMessage) error {
-		receivedMessagesTopic1 <- msg
+	n2.RegisterMessageHandler("topic1", func(from string, topic string, data []byte) error {
+		receivedMessagesTopic1 <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
-	n1.RegisterMessageHandler("topic2", func(from string, msg network.NetMessage) error {
-		receivedMessagesTopic2 <- msg
+	n1.RegisterMessageHandler("topic2", func(from string, topic string, data []byte) error {
+		receivedMessagesTopic2 <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
-	n2.RegisterMessageHandler("topic2", func(from string, msg network.NetMessage) error {
-		receivedMessagesTopic2 <- msg
+	n2.RegisterMessageHandler("topic2", func(from string, topic string, data []byte) error {
+		receivedMessagesTopic2 <- NetMessage{From: from, Topic: topic, Data: data}
 		return nil
 	})
 
@@ -226,8 +224,8 @@ func TestBroadcastMultipleTopics(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Verify Node2 receives messages through messageCollector
-	messagesTopic1 := make([]network.NetMessage, 0)
-	messagesTopic2 := make([]network.NetMessage, 0)
+	messagesTopic1 := make([]NetMessage, 0)
+	messagesTopic2 := make([]NetMessage, 0)
 
 	close(receivedMessagesTopic1)
 	close(receivedMessagesTopic2)

@@ -5,21 +5,14 @@ import (
 	"fmt"
 )
 
-// NetMessage Message structure in broadcast mode
-type NetMessage struct {
-	From  string // Peer ID of the message sender
-	Topic string // Topic to which the message belongs
-	Data  []byte // Message data
-}
-
-// Request Point-to-point request structure
-type Request struct {
-	Type string // Request type
-	Data []byte // Request data
+// netRequest Point-to-point request structure
+type netRequest struct {
+	Type string // netRequest type
+	Data []byte // netRequest data
 }
 
 // Serialize Serialize request
-func (r *Request) Serialize() ([]byte, error) {
+func (r *netRequest) Serialize() ([]byte, error) {
 	// Simple serialization implementation, in actual projects more complex serialization methods such as protobuf can be used
 	data := make([]byte, 0)
 	data = append(data, byte(len(r.Type)))
@@ -29,7 +22,7 @@ func (r *Request) Serialize() ([]byte, error) {
 }
 
 // Deserialize Deserialize request
-func (r *Request) Deserialize(data []byte) error {
+func (r *netRequest) Deserialize(data []byte) error {
 	if len(data) == 0 {
 		return fmt.Errorf("empty data")
 	}
@@ -42,14 +35,14 @@ func (r *Request) Deserialize(data []byte) error {
 	return nil
 }
 
-// Response Point-to-point response structure
-type Response struct {
-	Type string // Response type
-	Data []byte // Response data
+// netResponse Point-to-point response structure
+type netResponse struct {
+	Type string // netResponse type
+	Data []byte // netResponse data
 }
 
 // Serialize Serialize response
-func (r *Response) Serialize() ([]byte, error) {
+func (r *netResponse) Serialize() ([]byte, error) {
 	// Simple serialization implementation, in actual projects more complex serialization methods such as protobuf can be used
 	data := make([]byte, 0)
 	data = append(data, byte(len(r.Type)))
@@ -59,7 +52,7 @@ func (r *Response) Serialize() ([]byte, error) {
 }
 
 // Deserialize Deserialize response
-func (r *Response) Deserialize(data []byte) error {
+func (r *netResponse) Deserialize(data []byte) error {
 	if len(data) == 0 {
 		return fmt.Errorf("empty data")
 	}
@@ -73,13 +66,13 @@ func (r *Response) Deserialize(data []byte) error {
 }
 
 // MessageHandler Used to handle messages received in broadcast mode
-type MessageHandler func(from string, msg NetMessage) error
+type MessageHandler = func(from string, topic string, data []byte) error
 
 // RequestHandler Used to handle requests in point-to-point mode
-type RequestHandler func(from string, req Request) ([]byte, error)
+type RequestHandler = func(from string, reqType string, data []byte) ([]byte, error)
 
 // MessageFilter Used to filter broadcast messages
-type MessageFilter func(msg NetMessage) bool
+type MessageFilter = func(from string, topic string, data []byte) bool
 
 // NetworkInterface Network interface, defines all externally provided functions
 type NetworkInterface interface {

@@ -30,13 +30,13 @@ func main() {
 	}
 
 	// Register chat message handler
-	net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-		fmt.Printf("[%s] %s: %s\n", time.Now().Format("15:04:05"), from, string(msg.Data))
+	net.RegisterMessageHandler("chat", func(from string, topic string, data []byte) error {
+		fmt.Printf("[%s] %s: %s\n", time.Now().Format("15:04:05"), from, string(data))
 		return nil
 	})
 
 	// Register user info request handler
-	net.RegisterRequestHandler("userinfo", func(from string, req network.Request) ([]byte, error) {
+	net.RegisterRequestHandler("userinfo", func(from string, reqType string, data []byte) ([]byte, error) {
 		userInfo := fmt.Sprintf("User: %s", from)
 		fmt.Printf("[%s] Received userinfo request from %s\n", time.Now().Format("15:04:05"), from)
 		return []byte(userInfo), nil

@@ -47,15 +47,15 @@ if err != nil {
 
 ```go
 // Register broadcast message handler
-net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-    fmt.Printf("Received broadcast message from %s: %s\n", from, string(msg.Data))
+net.RegisterMessageHandler("chat", func(from string, topic string, data []byte) error {
+    fmt.Printf("Received broadcast message from %s on topic %s: %s\n", from, topic, string(data))
     return nil
 })
 
 // Register point-to-point request handler
-net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
+net.RegisterRequestHandler("echo", func(from string, reqType string, data []byte) ([]byte, error) {
     // Echo request data as response
-    return req.Data, nil
+    return data, nil
 })
 ```
 
@@ -63,9 +63,9 @@ net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byt
 
 ```go
 // Register message filter
-net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
+net.RegisterMessageFilter("chat", func(from string, topic string, data []byte) bool {
     // Filter out messages containing "spam"
-    if string(msg.Data) == "spam" {
+    if string(data) == "spam" {
         return false
     }
     return true

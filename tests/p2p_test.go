@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/lengzhao/network"
 )
 
 // TestPointToPointSend 测试点对点消息发送功能
@@ -66,11 +64,11 @@ func TestPointToPointSend(t *testing.T) {
 
 	// 注册请求处理器
 	responseData := []byte("response data")
-	n2.RegisterRequestHandler("test-request", func(from string, req network.Request) ([]byte, error) {
+	n2.RegisterRequestHandler("test-request", func(from string, reqType string, data []byte) ([]byte, error) {
 		// 验证请求数据
 		expectedData := []byte("request data")
-		if string(req.Data) != string(expectedData) {
-			t.Errorf("Request data mismatch. Expected: %s, Got: %s", string(expectedData), string(req.Data))
+		if string(data) != string(expectedData) {
+			t.Errorf("netRequest data mismatch. Expected: %s, Got: %s", string(expectedData), string(data))
 		}
 
 		return responseData, nil
@@ -89,7 +87,7 @@ func TestPointToPointSend(t *testing.T) {
 
 	// 验证响应数据
 	if string(resp) != string(responseData) {
-		t.Errorf("Response data mismatch. Expected: %s, Got: %s", string(responseData), string(resp))
+		t.Errorf("netResponse data mismatch. Expected: %s, Got: %s", string(responseData), string(resp))
 	}
 
 	// 取消上下文以停止网络

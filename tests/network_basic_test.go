@@ -2,64 +2,11 @@ package tests
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/lengzhao/network"
 )
-
-// messageCollector 用于收集广播消息
-type messageCollector struct {
-	messages []network.NetMessage
-	mu       sync.Mutex
-}
-
-func (mc *messageCollector) addMessage(msg network.NetMessage) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.messages = append(mc.messages, msg)
-}
-
-func (mc *messageCollector) getMessages() []network.NetMessage {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	// 返回副本以避免数据竞争
-	result := make([]network.NetMessage, len(mc.messages))
-	copy(result, mc.messages)
-	return result
-}
-
-func (mc *messageCollector) clear() {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.messages = []network.NetMessage{}
-}
-
-// createTestNetwork 创建测试网络实例
-func createTestNetwork(t *testing.T, host string, port int) network.NetworkInterface {
-	cfg := &network.NetworkConfig{
-		Host:     host,
-		Port:     port,
-		MaxPeers: 10,
-	}
-
-	n, err := network.New(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create network: %v", err)
-	}
-
-	return n
-}
-
-// cleanupNetworks 清理网络资源
-func cleanupNetworks(_ context.Context, cancel context.CancelFunc, _ ...network.NetworkInterface) {
-	// 取消上下文以停止网络
-	cancel()
-
-	// 等待网络关闭
-	time.Sleep(500 * time.Millisecond)
-}
 
 // TestNetworkCreation 测试网络创建功能
 func TestNetworkCreation(t *testing.T) {

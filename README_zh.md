@@ -47,15 +47,15 @@ if err != nil {
 
 ```go
 // 注册广播消息处理器
-net.RegisterMessageHandler("chat", func(from string, msg network.NetMessage) error {
-    fmt.Printf("Received broadcast message from %s: %s\n", from, string(msg.Data))
+net.RegisterMessageHandler("chat", func(from string, topic string, data []byte) error {
+    fmt.Printf("Received broadcast message from %s on topic %s: %s\n", from, topic, string(data))
     return nil
 })
 
 // 注册点对点请求处理器
-net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byte, error) {
+net.RegisterRequestHandler("echo", func(from string, reqType string, data []byte) ([]byte, error) {
     // 回显请求数据作为响应
-    return req.Data, nil
+    return data, nil
 })
 ```
 
@@ -63,9 +63,9 @@ net.RegisterRequestHandler("echo", func(from string, req network.Request) ([]byt
 
 ```go
 // 注册消息过滤器
-net.RegisterMessageFilter("chat", func(msg network.NetMessage) bool {
+net.RegisterMessageFilter("chat", func(from string, topic string, data []byte) bool {
     // 过滤掉包含"spam"的消息
-    if string(msg.Data) == "spam" {
+    if string(data) == "spam" {
         return false
     }
     return true
@@ -186,7 +186,7 @@ go run examples/mdns/mdns_example.go
 
 ```bash
 # 运行单元测试
-go test -v ./network/...
+go test -v ./...
 ```
 
 ## 依赖
